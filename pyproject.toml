@@ -1,0 +1,31 @@
+[project]
+name = "lex-pr"
+version = "0.1.0"
+description = "PR Runner & Merge Pyramid — Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Guffawaffle"}]
+dependencies = [
+	"typer>=0.12.0",
+	"jsonschema>=4.22.0"
+]
+
+[project.scripts]
+lex-pr = "lex_pr.cli:app"
+
+[project.optional-dependencies]
+dev = [
+	"pytest>=7.0",
+	"ruff>=0.5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lex_pr*"]

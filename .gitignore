@@ -2,9 +2,12 @@ node_modules/
 dist/
 coverage/
 .env
-.smirtergpt/cache/
-.smirtergpt/runner/logs/
-.smirtergpt/runner/results/
-.smirtergpt/runner/stage/
+.smartergpt/cache/
+.smartergpt/runner/logs/
+.smartergpt/runner/results/
+.smartergpt/runner/stage/
 .DS_Store
 *.log
+*.code-workspace
+.vscode/
+.idea/
