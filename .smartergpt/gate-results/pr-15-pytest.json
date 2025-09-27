@@ -1,0 +1,8 @@
+{
+	"pr": 15,
+	"gate": "pytest",
+	"status": "fail",
+	"duration_ms": 189,
+	"started_at": 1758999360000,
+	"log_tail": ""
+}

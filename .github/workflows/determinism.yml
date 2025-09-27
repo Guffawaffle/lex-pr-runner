@@ -1,0 +1,54 @@
+name: Verify Determinism
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch: {}   # optional
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  determinism:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node (20.x)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Print toolchain versions
+        run: |
+          node -v
+          npm -v
+
+      - name: Install dependencies (frozen)
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Determinism - run plan twice to dir
+        run: |
+          rm -rf .artifactsA .artifactsB
+          node dist/cli.js plan --out .artifactsA
+          node dist/cli.js plan --out .artifactsB
+          diff -u .artifactsA/plan.json .artifactsB/plan.json
+          diff -u .artifactsA/snapshot.md .artifactsB/snapshot.md
+
+      - name: Determinism - JSON stdout
+        run: |
+          node dist/cli.js plan --json > out1.json
+          node dist/cli.js plan --json > out2.json
+          diff -u out1.json out2.json
+
+      - name: Run determinism test suite
+        run: npm test -- tests/canonicalJson.test.ts tests/hash.test.ts tests/deterministic-simple.test.ts

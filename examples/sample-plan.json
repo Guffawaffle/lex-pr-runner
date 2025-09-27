@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0.0",
+  "target": "main",
+  "policy": {
+    "requiredGates": ["lint", "type", "unit"],
+    "optionalGates": ["e2e"],
+    "maxWorkers": 2,
+    "retries": {
+      "e2e": {
+        "maxAttempts": 2,
+        "backoffSeconds": 30
+      }
+    }
+  },
+  "items": [
+    {
+      "name": "auth-foundation",
+      "deps": [],
+      "gates": [
+        {
+          "name": "lint",
+          "run": "npm run lint",
+          "cwd": ".",
+          "artifacts": ["lint-results.json"]
+        },
+        {
+          "name": "type",
+          "run": "npm run type-check",
+          "artifacts": ["type-check.json"]
+        },
+        {
+          "name": "unit",
+          "run": "npm run test:unit",
+          "artifacts": ["unit-results.json", "coverage.json"]
+        }
+      ]
+    },
+    {
+      "name": "user-management",
+      "deps": ["auth-foundation"],
+      "gates": [
+        {
+          "name": "lint",
+          "run": "npm run lint",
+          "artifacts": ["lint-results.json"]
+        },
+        {
+          "name": "type",
+          "run": "npm run type-check",
+          "artifacts": ["type-check.json"]
+        },
+        {
+          "name": "unit",
+          "run": "npm run test:unit",
+          "artifacts": ["unit-results.json", "coverage.json"]
+        },
+        {
+          "name": "e2e",
+          "run": "npm run test:e2e",
+          "runtime": "ci-service",
+          "artifacts": ["e2e-results.json", "screenshots/"]
+        }
+      ]
+    },
+    {
+      "name": "api-endpoints",
+      "deps": ["auth-foundation"],
+      "gates": [
+        {
+          "name": "lint",
+          "run": "npm run lint",
+          "artifacts": ["lint-results.json"]
+        },
+        {
+          "name": "type",
+          "run": "npm run type-check",
+          "artifacts": ["type-check.json"]
+        },
+        {
+          "name": "unit",
+          "run": "npm run test:unit -- --coverage",
+          "artifacts": ["unit-results.json", "coverage.json"]
+        }
+      ]
+    }
+  ]
+}
