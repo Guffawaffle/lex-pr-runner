@@ -11,6 +11,14 @@ coverage/
 .vscode/
 .idea/
 
+# Python virtual environment and cache
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
 # Runtime artifacts - ignore these completely
 .artifacts*/
 artifacts*/
