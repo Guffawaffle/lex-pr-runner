@@ -1,2 +1,0 @@
-[console_scripts]
-lex-pr = lex_pr.cli:app
