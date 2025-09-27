@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+.smirtergpt/cache/
+.smirtergpt/runner/logs/
+.smirtergpt/runner/results/
+.smirtergpt/runner/stage/
+.DS_Store
+*.log
