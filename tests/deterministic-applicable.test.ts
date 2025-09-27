@@ -4,9 +4,10 @@ import { loadInputs } from '../src/core/inputs';
 import { canonicalJSONStringify } from '../src/util/canonicalJson';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 describe('deterministic plan generation', () => {
-	const testDir = '/tmp/lex-pr-runner-test';
+	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-test');
 
 	beforeEach(() => {
 		// Clean test directory

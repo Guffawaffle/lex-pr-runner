@@ -3,10 +3,11 @@ import { canonicalJSONStringify } from '../src/util/canonicalJson';
 import { sha256, sha256FileRaw } from '../src/util/hash';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execSync } from 'child_process';
 
 describe('bulletproof determinism', () => {
-	const testDir = '/tmp/lex-pr-runner-determinism-test';
+	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-determinism-test');
 
 	beforeEach(() => {
 		// Clean test directory
@@ -38,13 +39,15 @@ items:
 `);
 
 		// Build CLI
-		execSync('cd /home/guff/lex-pr-runner && npm run build', { stdio: 'inherit' });
+		const repoRoot = path.resolve(__dirname, '..');
+		execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });
 
 		// First run
-		execSync('node /home/guff/lex-pr-runner/dist/cli.js plan --out .artifacts1', { stdio: 'inherit' });
+		const cliPath = path.join(repoRoot, 'dist/cli.js');
+		execSync(`node ${cliPath} plan --out .artifacts1`, { stdio: 'inherit' });
 
 		// Second run
-		execSync('node /home/guff/lex-pr-runner/dist/cli.js plan --out .artifacts2', { stdio: 'inherit' });
+		execSync(`node ${cliPath} plan --out .artifacts2`, { stdio: 'inherit' });
 
 		// Compare exact bytes
 		const plan1 = fs.readFileSync('.artifacts1/plan.json');
@@ -73,13 +76,15 @@ items:
 `);
 
 		// Build CLI
-		execSync('cd /home/guff/lex-pr-runner && npm run build', { stdio: 'inherit' });
+		const repoRoot = path.resolve(__dirname, '..');
+		execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });
 
 		// First run
-		const output1 = execSync('node /home/guff/lex-pr-runner/dist/cli.js plan --json', { encoding: 'utf8' });
+		const cliPath = path.join(repoRoot, 'dist/cli.js');
+		const output1 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
 
 		// Second run
-		const output2 = execSync('node /home/guff/lex-pr-runner/dist/cli.js plan --json', { encoding: 'utf8' });
+		const output2 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
 
 		// Compare exact bytes
 		expect(output1).toBe(output2);

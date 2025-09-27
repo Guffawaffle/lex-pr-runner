@@ -3,9 +3,11 @@ import { generatePlan } from '../src/core/plan';
 import { loadInputs } from '../src/core/inputs';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 describe('error handling and validation', () => {
-	const testDir = '/tmp/lex-pr-runner-error-test';
+	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-error-test');
 
 	beforeEach(() => {
 		// Clean test directory
@@ -72,9 +74,12 @@ items:
 `);
 
 		// CLI should exit with code 2 for validation errors
+		const repoRoot = path.resolve(__dirname, '..');
+		const cliPath = path.join(repoRoot, 'dist/cli.js');
+
 		let caughtError: any;
 		try {
-			execSync('node /home/guff/lex-pr-runner/dist/cli.js plan --json', {
+			execSync(`node ${cliPath} plan --json`, {
 				cwd: testDir,
 				encoding: 'utf-8',
 				stdio: 'pipe'
