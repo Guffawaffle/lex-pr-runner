@@ -1,32 +1,59 @@
-# lex-pr — PR Runner & Merge Pyramid
+# lex-pr-runner
 
-> **Tagline:** Fan‑out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.
+**Lex-PR Runner** — fan-out PRs, compute a merge pyramid, run local gates, and **weave** merges cleanly.
+- CLI: `lex-pr plan|run|merge|doctor|format|ci-replay`
+- MCP server: exposes tools (`plan.create`) and resources under `.smartergpt/runner/`
 
-## Quickstart
-
+## Quick start
 ```bash
-# Create & activate venv
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# Install dependencies
+npm install
 
-# Install (editable) + dev tools
-pip install -e ".[dev]"
+# dev
+npm run dev
+
+# run CLI (ts)
+npm run cli -- plan --help
+
+# run MCP server
+npm run mcp
 ```
 
-## Commands
+## Project layout
+- `src/core`: planner, gates runner, weave strategies
+- `src/cli.ts`: human CLI (Commander)
+- `src/mcp/server.ts`: MCP tool/resource surface (adapter)
+- `.smartergpt/`: canonical inputs + runner artifacts
+
+## CLI Commands
 
 ```bash
-# Validate a plan (non-JSON and JSON modes)
-lex-pr schema validate plan.json
-lex-pr schema validate plan.json --json
+# Compute merge pyramid and freeze plan artifacts
+npm run cli -- plan [--out <dir>]
 
-# Show merge order (levels)
-lex-pr merge-order plan.json --json
-
-# Gate runner (stub in v1)
-lex-pr gate
+# Environment and config sanity checks
+npm run cli -- doctor
 ```
+
+## MCP Tools
+
+The MCP server exposes the following tools for chat/agent integration:
+
+### `plan.create`
+Runs the same logic as the CLI plan command, generating:
+- `plan.json`: Structured plan data
+- `snapshot.md`: Human-readable plan summary
+
+**Parameters:**
+- `out` (optional): Artifacts output directory (default: `.smartergpt/runner`)
+
+**Returns:** Plan metadata and URIs to generated artifacts
+
+### Resources
+- `.smartergpt/runner/plan.json`: Read-only access to structured plan data
+- `.smartergpt/runner/snapshot.md`: Read-only access to plan summary
 
 ## Notes
 - Deterministic > clever. Outputs are sorted for stable diffs.
-- `schemas/plan.schema.json` is the source of truth for validation.
+- Plan artifacts are deterministic when inputs are unchanged.
+- MCP server provides programmatic access to planning functionality.
