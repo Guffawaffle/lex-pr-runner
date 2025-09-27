@@ -1,0 +1,44 @@
+# Determinism CI Job
+# Add this to your GitHub Actions workflow to verify deterministic behavior
+
+name: Verify Determinism
+on: [push, pull_request]
+
+jobs:
+  determinism:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x (pinned)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI
+        run: pnpm run build
+
+      - name: Test plan --out determinism
+        run: |
+          node dist/cli.js plan --out .artifacts
+          cp .artifacts/plan.json .a1.json && cp .artifacts/snapshot.md .s1.md
+          rm -rf .artifacts && node dist/cli.js plan --out .artifacts
+          diff -u .a1.json .artifacts/plan.json
+          diff -u .s1.md .artifacts/snapshot.md
+
+      - name: Test plan --json determinism
+        run: |
+          node dist/cli.js plan --json >o1.json
+          node dist/cli.js plan --json >o2.json
+          diff -u o1.json o2.json
+
+      - name: Run determinism test suite
+        run: pnpm test -- tests/canonicalJson.test.ts tests/hash.test.ts tests/deterministic-simple.test.ts

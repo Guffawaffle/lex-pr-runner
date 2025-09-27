@@ -134,44 +134,69 @@ export const Gate = z.object({
 	name: z.string(),
 	run: z.string(),
 	cwd: z.string().optional(),
-	env: z.record(z.string()).optional(),
+	env: z.record(z.string()).default({}),
 	// Runtime configuration
 	runtime: z.enum(["local", "container", "ci-service"]).default("local"),
 	// Container spec (only used when runtime is "container")
 	container: ContainerSpec.optional(),
 	// Expected artifact paths (for output collection)
-	artifacts: z.array(z.string()).optional()
-});
+	artifacts: z.array(z.string()).default([])
+}).strict();
 export type Gate = z.infer<typeof Gate>;
 
 export const PlanItem = z.object({
 	name: z.string(),
 	deps: z.string().array().default([]),
-	gates: z.array(Gate).optional()
-});
+	gates: z.array(Gate).default([])
+}).strict();
 export type PlanItem = z.infer<typeof PlanItem>;
 
 export const Plan = z.object({
 	schemaVersion: SchemaVersion,
 	target: z.string().default("main"),
 	policy: Policy.optional(),
-	items: z.array(PlanItem)
-});
+	items: z.array(PlanItem).default([])
+}).strict();
 export type Plan = z.infer<typeof Plan>;
+
+/**
+ * Machine-readable validation error
+ */
+export interface ValidationError {
+	path: string;
+	message: string;
+	code: string;
+}
 
 /**
  * Validation errors for schema failures
  */
 export class SchemaValidationError extends Error {
 	public readonly issues: z.ZodIssue[];
+	public readonly errors: ValidationError[];
 
 	constructor(issues: z.ZodIssue[]) {
-		const message = issues.map(issue =>
-			`${issue.path.join('.')}: ${issue.message}`
-		).join('; ');
+		const errors = issues.map(issue => ({
+			path: issue.path.join('.'),
+			message: issue.message,
+			code: issue.code
+		}));
+
+		const message = errors.map(e => `${e.path}: ${e.message}`).join('; ');
 		super(`Schema validation failed: ${message}`);
 		this.name = "SchemaValidationError";
 		this.issues = issues;
+		this.errors = errors;
+	}
+
+	/**
+	 * Get machine-readable error format
+	 */
+	toJSON(): { valid: false; errors: ValidationError[] } {
+		return {
+			valid: false,
+			errors: this.errors
+		};
 	}
 }
 

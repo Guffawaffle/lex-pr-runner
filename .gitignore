@@ -2,6 +2,40 @@ node_modules/
 dist/
 coverage/
 .env
+
+# Runtime outputs - ignore these completely
+.smartergpt/runner/
+gate-results/
+artifacts/
+*.artifacts/
+*-artifacts/
+deliverables/
+
+# Generated plan artifacts
+snapshot.md
+plan-*.json
+
+# Caches
+.smartergpt/cache/
+
+# Keep only live deliverable in VCS
+.smartergpt/deliverables/
+!.smartergpt/deliverables/.live.md
+
+# Keep these tracked
+!.smartergpt/intent.md
+!.smartergpt/scope.yml
+!.smartergpt/deps.yml
+!.smartergpt/gates.yml
+!.smartergpt/stack.yml
+!.smartergpt/pull-request-template.md
+
+.DS_Store
+*.log
+*.code-workspace
+.vscode/
+.idea/coverage/
+.env
 .smartergpt/runner/
 .smartergpt/cache/
 .smartergpt/deliverables/

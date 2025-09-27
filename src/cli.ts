@@ -5,8 +5,30 @@ import { computeMergeOrder, CycleError, UnknownDependencyError } from "./mergeOr
 import { executeGatesWithPolicy } from "./gates.js";
 import { ExecutionState } from "./executionState.js";
 import { MergeEligibilityEvaluator } from "./mergeEligibility.js";
+import { loadInputs } from "./core/inputs.js";
+import { generatePlan, generateEmptyPlan } from "./core/plan.js";
+import { generateSnapshot, generatePlanSummary } from "./core/snapshot.js";
+import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import * as fs from "fs";
 import * as path from "path";
+
+/**
+ * CLI exit discipline with proper error codes
+ */
+function exitWith(e: unknown, schemaCode = "ESCHEMA") {
+  const err: any = e;
+  if (err?.code === schemaCode && Array.isArray(err.issues)) {
+    console.log(JSON.stringify({ errors: err.issues }, null, 2));
+    console.error(err.message);
+    process.exit(2);
+  }
+  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError) {
+    console.error(String(err?.message ?? e));
+    process.exit(2); // Validation errors
+  }
+  console.error(String(err?.message ?? e));
+  process.exit(1); // Unexpected failures
+}
 
 const program = new Command();
 program.name("lex-pr").description("Lex-PR Runner CLI - TypeScript Implementation").version("0.1.0");
@@ -65,6 +87,65 @@ program
 			})
 	);
 
+// Plan generation command
+program
+	.command("plan")
+	.description("Generate plan from configuration sources")
+	.option("--out <dir>", "Output directory for artifacts", ".smartergpt/runner")
+	.option("--json", "Output canonical plan JSON to stdout only")
+	.option("--dry-run", "Validate inputs and show what would be written")
+	.action(async (opts) => {
+		try {
+			// Load inputs with deterministic ordering
+			const inputs = loadInputs();
+
+			// Generate normalized plan
+			const plan = inputs.items.length > 0 ? generatePlan(inputs) : generateEmptyPlan(inputs.target);
+
+			// Validate plan structure
+			const validatedPlan = loadPlan(canonicalJSONStringify(plan));
+
+			if (opts.json) {
+				// JSON mode: output only canonical plan to stdout, write nothing else
+				process.stdout.write(canonicalJSONStringify(validatedPlan));
+				process.exit(0);
+			}
+
+			// Generate artifacts
+			const planJSON = canonicalJSONStringify(validatedPlan);
+			const snapshot = generateSnapshot(validatedPlan, inputs);
+
+			if (opts.dryRun) {
+				console.log("Dry run - would generate:");
+				console.log(`📁 ${path.join(opts.out, "plan.json")} (${planJSON.length} bytes)`);
+				console.log(`📁 ${path.join(opts.out, "snapshot.md")} (${snapshot.length} bytes)`);
+				console.log("");
+				console.log(generatePlanSummary(validatedPlan));
+				process.exit(0);
+			}
+
+			// Write artifacts
+			const outDir = opts.out;
+			fs.mkdirSync(outDir, { recursive: true });
+
+			const planPath = path.join(outDir, "plan.json");
+			const snapshotPath = path.join(outDir, "snapshot.md");
+
+			fs.writeFileSync(planPath, planJSON);
+			fs.writeFileSync(snapshotPath, snapshot);
+
+			console.log(`✓ Generated plan artifacts:`);
+			console.log(`  📁 ${planPath}`);
+			console.log(`  📁 ${snapshotPath}`);
+			console.log("");
+			console.log(generatePlanSummary(validatedPlan));
+
+			process.exit(0);
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
 // Merge order command
 program
 	.command("merge-order")
@@ -85,7 +166,7 @@ program
 			const levels = computeMergeOrder(plan);
 
 			if (opts.json) {
-				console.log(JSON.stringify({ levels }));
+				console.log(canonicalJSONStringify({ levels }));
 			} else {
 				console.log(`Merge order for ${plan.items.length} items:`);
 				levels.forEach((level: string[], index: number) => {
@@ -96,11 +177,11 @@ program
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			if (opts.json) {
-				console.log(JSON.stringify({ error: message }));
+				console.log(canonicalJSONStringify({ error: message }));
 			} else {
 				console.error(`Error computing merge order: ${message}`);
 			}
-			process.exit(1);
+			exitWith(error);
 		}
 	});
 
@@ -167,7 +248,7 @@ program
 						artifactDir: opts.artifactDir
 					}
 				};
-				console.log(JSON.stringify(output, null, 2));
+				console.log(canonicalJSONStringify(output));
 			} else if (opts.statusTable) {
 				// Generate status table for PR comments
 				generateStatusTable(results, mergeSummary);
@@ -200,7 +281,12 @@ program
 
 		} catch (error) {
 			console.error(`Error executing plan: ${error instanceof Error ? error.message : String(error)}`);
-			process.exit(1);
+			// Use exit code 2 for validation errors, 1 for others
+			if (error instanceof SchemaValidationError || error instanceof CycleError || error instanceof UnknownDependencyError) {
+				process.exit(2);
+			} else {
+				process.exit(1);
+			}
 		}
 	});
 
@@ -225,7 +311,7 @@ program
 			const mergeSummary = evaluator.getMergeSummary();
 
 			if (opts.json) {
-				console.log(JSON.stringify({
+				console.log(canonicalJSONStringify({
 					plan: {
 						schemaVersion: plan.schemaVersion,
 						target: plan.target,
@@ -233,7 +319,7 @@ program
 						policy: plan.policy
 					},
 					mergeSummary
-				}, null, 2));
+				}));
 			} else {
 				console.log(`Plan: ${plan.items.length} items targeting ${plan.target}`);
 				console.log(`Schema version: ${plan.schemaVersion}`);
@@ -244,7 +330,12 @@ program
 			}
 		} catch (error) {
 			console.error(`Error getting status: ${error instanceof Error ? error.message : String(error)}`);
-			process.exit(1);
+			// Use exit code 2 for validation errors, 1 for others
+			if (error instanceof SchemaValidationError || error instanceof CycleError || error instanceof UnknownDependencyError) {
+				process.exit(2);
+			} else {
+				process.exit(1);
+			}
 		}
 	});
 
