@@ -1,5 +1,6 @@
 version: 1
 target: main
+repo: Guffawaffle/lex-pr-runner
 sources:
   - query: "is:open label:stack:*"
 selectors:
@@ -8,4 +9,4 @@ selectors:
 defaults:
   strategy: rebase-weave
   base: main
-pin_commits: false
+pin_commits: true
