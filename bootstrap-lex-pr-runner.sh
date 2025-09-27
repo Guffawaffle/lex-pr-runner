@@ -161,7 +161,10 @@ write_file "README.md" <<EOF
 ${PKG_MGR:-npm} run dev
 
 # run CLI (ts)
-${PKG_MGR:-npm} run cli -- plan --help
+${PKG_MGR:-npm} run cli -- schema validate plan.json
+${PKG_MGR:-npm} run cli -- merge-order plan.json
+${PKG_MGR:-npm} run cli -- gate plan.json
+${PKG_MGR:-npm} run cli -- merge plan.json --dry-run
 \`\`\`
 
 ## Project layout

@@ -1,0 +1,13 @@
+{
+	"ts": "20250927T190805Z",
+	"base": "main",
+	"branch": "weave/rehearsal/20250927T190805Z",
+	"pr": 10,
+	"head": "copilot/fix-971d92e3-a8f0-47f0-b703-8d8904e611d2",
+	"ready_input": 0,
+	"action": "merge",
+	"status": "conflict",
+	"conflicts": [".smartergpt/deliverables/.live.md","README.md","src/cli.ts"],
+	"commit_sha": "",
+	"post_merge_gates": { "ruff": "skipped", "mypy": "skipped", "pytest": "skipped" }
+}

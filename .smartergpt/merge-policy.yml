@@ -1,0 +1,26 @@
+# Deterministic file-level merge preferences (first match wins).
+rules:
+  # Package locks / compiled manifests: prefer *theirs* (incoming PR).
+  - globs: ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/poetry.lock", "**/Cargo.lock", "**/Pipfile.lock"]
+    resolution: theirs
+
+  # Dependency manifests: prefer *theirs*, then format.
+  - globs: ["**/package.json", "**/pyproject.toml", "**/requirements*.txt", "**/Pipfile", "**/Cargo.toml"]
+    resolution: theirs
+    format: true
+
+  # CI / workflow files: prefer *ours* (protect runner invariants).
+  - globs: [".github/**", ".smartergpt/**", ".devcontainer/**", ".pre-commit-config.yaml"]
+    resolution: ours
+
+  # Nginx / infra base configs: prefer *ours* by default.
+  - globs: ["**/nginx/**", "**/*.nginx", "**/*.conf"]
+    resolution: ours
+
+  # Docs: keep both (append PR content below ours) and strip markers.
+  - globs: ["**/*.md", "**/*.rst", "docs/**"]
+    resolution: keep-both
+
+  # Everything else (code): attempt auto 3-way merge; if still conflicted, emit AI ticket.
+  - globs: ["**/*"]
+    resolution: auto
