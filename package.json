@@ -1,0 +1,33 @@
+{
+	"name": "lex-pr-runner",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"lex-pr": "dist/cli.js"
+	},
+	"scripts": {
+		"dev": "tsx watch src/cli.ts",
+		"cli": "tsx src/cli.ts",
+		"mcp": "tsx src/mcp/server.ts",
+		"build": "tsup src/cli.ts --format esm,cjs --dts --out-dir dist && tsup src/mcp/server.ts --format esm,cjs --dts --out-dir dist",
+		"lint": "eslint . --ext .ts",
+		"typecheck": "tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"chalk": "^5.3.0",
+		"commander": "^12.0.0",
+		"execa": "^9.2.0",
+		"fs-extra": "^11.2.0",
+		"simple-git": "^3.24.0",
+		"yaml": "^2.6.0",
+		"zod": "^3.23.8"
+	},
+	"devDependencies": {
+		"@types/node": "^20.12.12",
+		"eslint": "^9.10.0",
+		"tsx": "^4.19.0",
+		"tsup": "^8.1.0",
+		"typescript": "^5.6.3"
+	}
+}
