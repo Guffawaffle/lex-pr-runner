@@ -35,7 +35,7 @@ export function generatePlan(inputs: InputConfig): Plan {
  */
 function transformInputToPlanItem(inputItem: InputItem): PlanItem {
 	return {
-		name: inputItem.name || inputItem.branch || `item-${inputItem.id}`,
+		name: inputItem.name || inputItem.id || inputItem.branch || `item-${inputItem.id}`,
 		deps: stableSort(inputItem.deps || []),
 		gates: inputItem.gates?.map(transformInputGate) || []
 	};
