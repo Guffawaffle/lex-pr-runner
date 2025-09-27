@@ -54,14 +54,29 @@ version: 1
 target: main
 items:
   - id: 1
-    branch: feature/auth-system  
+    name: auth-system      # Dependencies resolve by 'name' field
+    branch: feature/auth-system
     sha: abc123def456
-    needs: []
+    deps: []               # Use 'deps' array (references other item names)
     strategy: rebase-weave
   - id: 2
+    name: api-endpoints    # Generator defaults: name := id
     branch: feature/api-endpoints
-    needs: [1]
+    deps: ["auth-system"]  # Depends on item with name="auth-system"
     strategy: merge-weave
+```
+
+## CLI Exit Codes
+
+The CLI follows standard Unix conventions for automation and CI integration:
+
+- **`0`**: Success - operation completed without errors
+- **`2`**: Validation errors - invalid configuration, unknown dependencies, schema violations
+- **`1`**: Unexpected errors - system failures, network issues, crashes
+
+```bash
+# CI-friendly validation
+npm run cli -- plan --json || echo "Plan validation failed with exit code $?"
 ```
 
 ## Project layout
@@ -70,6 +85,24 @@ items:
 - `src/mcp/server.ts`: MCP tool/resource surface (adapter)
 - `.smartergpt/`: canonical inputs + runner artifacts
 
+## Deterministic Behavior
+
+The runner prioritizes **deterministic outputs** for reliable CI/CD integration:
+
+```bash
+# Verify determinism - identical inputs produce identical byte outputs
+npm run cli -- plan --out .artifacts1
+npm run cli -- plan --out .artifacts2
+cmp .artifacts1/plan.json .artifacts2/plan.json  # Should be identical
+```
+
+**Key guarantees:**
+- Canonical JSON with stable key ordering (no timestamps)
+- Raw-byte deterministic hashing for artifact verification
+- Cross-platform portability (Windows, macOS, Linux)
+- Dependency resolution by `name` field with cycle detection
+
 ## Notes
 - Deterministic > clever. Outputs are sorted for stable diffs.
 - `schemas/plan.schema.json` is the source of truth for validation.
+- Dependencies resolve by `name` field (generator can default `name := id`)

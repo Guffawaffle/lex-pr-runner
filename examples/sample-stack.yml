@@ -1,0 +1,66 @@
+version: 1
+target: main
+items:
+  - id: auth-foundation
+    name: auth-foundation
+    branch: feature/auth-foundation
+    deps: []
+    gates:
+      - name: lint
+        run: npm run lint
+        cwd: "."
+        artifacts:
+          - lint-results.json
+      - name: type
+        run: npm run type-check
+        artifacts:
+          - type-check.json
+      - name: unit
+        run: npm run test:unit
+        artifacts:
+          - unit-results.json
+          - coverage.json
+
+  - id: user-management
+    name: user-management
+    branch: feature/user-management
+    deps: ["auth-foundation"]
+    gates:
+      - name: lint
+        run: npm run lint
+        artifacts:
+          - lint-results.json
+      - name: type
+        run: npm run type-check
+        artifacts:
+          - type-check.json
+      - name: unit
+        run: npm run test:unit
+        artifacts:
+          - unit-results.json
+          - coverage.json
+      - name: e2e
+        run: npm run test:e2e
+        runtime: ci-service
+        artifacts:
+          - e2e-results.json
+          - screenshots/
+
+  - id: api-endpoints
+    name: api-endpoints
+    branch: feature/api-endpoints
+    deps: ["auth-foundation"]
+    gates:
+      - name: lint
+        run: npm run lint
+        artifacts:
+          - lint-results.json
+      - name: type
+        run: npm run type-check
+        artifacts:
+          - type-check.json
+      - name: unit
+        run: npm run test:unit -- --coverage
+        artifacts:
+          - unit-results.json
+          - coverage.json

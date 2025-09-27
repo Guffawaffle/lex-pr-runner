@@ -1,53 +1,43 @@
+# Dependencies and build output
 node_modules/
 dist/
 coverage/
+
+# Environment and IDE
 .env
-
-# Runtime outputs - ignore these completely
-.smartergpt/runner/
-gate-results/
-artifacts/
-*.artifacts/
-*-artifacts/
-deliverables/
-
-# Generated plan artifacts
-snapshot.md
-plan-*.json
-
-# Caches
-.smartergpt/cache/
-
-# Keep only live deliverable in VCS
-.smartergpt/deliverables/
-!.smartergpt/deliverables/.live.md
-
-# Keep these tracked
-!.smartergpt/intent.md
-!.smartergpt/scope.yml
-!.smartergpt/deps.yml
-!.smartergpt/gates.yml
-!.smartergpt/stack.yml
-!.smartergpt/pull-request-template.md
-
 .DS_Store
 *.log
 *.code-workspace
 .vscode/
-.idea/coverage/
-.env
+.idea/
+
+# Runtime artifacts - ignore these completely
+.artifacts*/
+artifacts*/
+gate-results/
+deliverables/
+out*.json
+
+# .smartergpt runtime directories
 .smartergpt/runner/
+.smartergpt/gate-results/
 .smartergpt/cache/
 .smartergpt/deliverables/
 
-# Keep these tracked
+# Generated plan artifacts (runtime)
+snapshot.md
+plan-*.json
+
+# Keep only live deliverable in VCS
+!.smartergpt/deliverables/.live.md
+
+# Keep these profile files tracked
 !.smartergpt/intent.md
 !.smartergpt/scope.yml
 !.smartergpt/deps.yml
 !.smartergpt/gates.yml
 !.smartergpt/stack.yml
 !.smartergpt/pull-request-template.md
-.DS_Store
 *.log
 *.code-workspace
 .vscode/
