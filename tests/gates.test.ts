@@ -75,16 +75,31 @@ describe('Gate Execution', () => {
 	});
 
 	it('respects working directory', async () => {
-		const gate: Gate = {
-			name: 'test-cwd',
-			run: 'pwd',
-			cwd: '/tmp',
-			runtime: 'local'
-		};
+		const testCwd = path.join(os.tmpdir(), 'test-cwd-' + Math.random().toString(36).substring(7));
 
-		const result = await executeGate(gate, defaultPolicy, tempDir, 5000);
+		// Create the test directory
+		fs.mkdirSync(testCwd, { recursive: true });
 
-		expect(result.stdout).toContain('/tmp');
+		try {
+			const gate: Gate = {
+				name: 'test-cwd',
+				run: process.platform === 'win32' ? 'cd' : 'pwd',
+				cwd: testCwd,
+				env: {},
+				runtime: 'local',
+				artifacts: []
+			};
+
+			const result = await executeGate(gate, defaultPolicy, tempDir, 5000);
+
+			// Normalize paths for comparison (handle Windows vs Unix)
+			const normalizedOutput = (result.stdout || '').trim().replace(/\\/g, '/');
+			const normalizedExpected = testCwd.replace(/\\/g, '/');
+			expect(normalizedOutput).toContain(normalizedExpected);
+		} finally {
+			// Clean up the test directory
+			fs.rmSync(testCwd, { recursive: true, force: true });
+		}
 	});
 
 	it('respects environment variables', async () => {
@@ -92,7 +107,8 @@ describe('Gate Execution', () => {
 			name: 'test-env',
 			run: 'echo $TEST_VAR',
 			env: { TEST_VAR: 'test-value' },
-			runtime: 'local'
+			runtime: 'local',
+			artifacts: []
 		};
 
 		const result = await executeGate(gate, defaultPolicy, tempDir, 5000);
@@ -104,7 +120,9 @@ describe('Gate Execution', () => {
 		const gate: Gate = {
 			name: 'test-timeout',
 			run: 'sleep 1', // Sleep for 1 second
-			runtime: 'local'
+			env: {},
+			runtime: 'local',
+			artifacts: []
 		};
 
 		const result = await executeGate(gate, defaultPolicy, tempDir, 100); // 100ms timeout
@@ -118,8 +136,8 @@ describe('Gate Execution', () => {
 			name: 'test-item',
 			deps: [],
 			gates: [
-				{ name: 'gate1', run: 'echo "gate 1"', runtime: 'local' as const },
-				{ name: 'gate2', run: 'echo "gate 2"', runtime: 'local' as const }
+				{ name: 'gate1', run: 'echo "gate 1"', env: {}, runtime: 'local' as const, artifacts: [] },
+				{ name: 'gate2', run: 'echo "gate 2"', env: {}, runtime: 'local' as const, artifacts: [] }
 			]
 		};
 
@@ -141,7 +159,8 @@ describe('Gate Execution', () => {
 	it('handles items with no gates', async () => {
 		const item = {
 			name: 'test-item-no-gates',
-			deps: []
+			deps: [],
+			gates: []
 		};
 
 		const executionState = new ExecutionState({
