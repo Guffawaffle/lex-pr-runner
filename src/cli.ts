@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { createPlan } from "./core/plan.js";
+import { runDoctorChecks } from "./core/doctor.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -24,7 +25,29 @@ program
 	.command("doctor")
 	.description("Environment and config sanity checks")
 	.action(async () => {
-		console.log("doctor: TODO — check git, node, package manager, and .smartergpt/*");
+		const report = await runDoctorChecks();
+		
+		console.log("Environment Health Check");
+		console.log("======================");
+		
+		for (const check of report.checks) {
+			const status = check.passed ? "✓" : "✗";
+			console.log(`${status} ${check.name}: ${check.message}`);
+			
+			if (!check.passed && check.fix) {
+				console.log(`  Fix: ${check.fix}`);
+			}
+		}
+		
+		console.log();
+		
+		if (report.passed) {
+			console.log("✓ All checks passed! Environment is healthy.");
+			process.exit(0);
+		} else {
+			console.log("✗ Some checks failed. Please address the issues above.");
+			process.exit(1);
+		}
 	});
 
 program.parseAsync(process.argv);
