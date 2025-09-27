@@ -16,6 +16,12 @@ pip install -e ".[dev]"
 ## Commands
 
 ```bash
+# Environment health check
+lex-pr doctor
+
+# Generate plan artifacts
+lex-pr plan [--out <dir>]
+
 # Validate a plan (non-JSON and JSON modes)
 lex-pr schema validate plan.json
 lex-pr schema validate plan.json --json
