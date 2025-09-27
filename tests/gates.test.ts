@@ -83,7 +83,7 @@ describe('Gate Execution', () => {
 		try {
 			const gate: Gate = {
 				name: 'test-cwd',
-				run: process.platform === 'win32' ? 'cd' : 'pwd',
+				run: 'node -e "console.log(process.cwd())"',
 				cwd: testCwd,
 				env: {},
 				runtime: 'local',
