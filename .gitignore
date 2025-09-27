@@ -23,6 +23,7 @@ out*.json
 .smartergpt/gate-results/
 .smartergpt/cache/
 .smartergpt/deliverables/
+.smartergpt/gate-results/
 
 # Generated plan artifacts (runtime)
 snapshot.md
