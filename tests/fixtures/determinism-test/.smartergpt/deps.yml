@@ -1,0 +1,11 @@
+version: 1
+depends_on:
+  - repo: auth-service
+    branch: main
+    required: true
+  - repo: shared-utils
+    branch: v2.1.0
+    required: false
+strategies:
+  default: rebase-weave
+  fallback: merge-weave

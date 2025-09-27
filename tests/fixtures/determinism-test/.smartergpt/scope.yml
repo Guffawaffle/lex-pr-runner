@@ -1,0 +1,11 @@
+version: 1
+target: main
+sources:
+  - query: "is:open label:stack:feature"
+selectors:
+  include_labels: ["stack:feature"]
+  exclude_labels: ["WIP", "do-not-merge", "blocked"]
+defaults:
+  strategy: rebase-weave
+  base: main
+pin_commits: true

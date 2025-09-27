@@ -1,0 +1,14 @@
+version: 1
+gates:
+  - name: lint
+    run: npm run lint
+    required: true
+  - name: test-unit
+    run: npm run test:unit
+    required: true
+  - name: test-integration
+    run: npm run test:integration
+    required: false
+  - name: security-scan
+    run: npm audit
+    required: true

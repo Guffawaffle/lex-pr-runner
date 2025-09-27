@@ -1,0 +1,15 @@
+version: 1
+target: main
+prs:
+  - branch: feature/auth-system
+    sha: abc123def456
+    needs: []
+    strategy: rebase-weave
+  - branch: feature/user-profile
+    sha: def456ghi789
+    needs: [1]
+    strategy: merge-weave
+  - branch: feature/notifications
+    sha: ghi789jkl012
+    needs: [2]
+    strategy: rebase-weave
