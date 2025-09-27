@@ -1,12 +1,21 @@
 name: Verify Determinism
 
 on:
-  push:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch: {}   # optional
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   determinism:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     steps:
       - uses: actions/checkout@v4
 
