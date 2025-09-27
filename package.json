@@ -12,7 +12,9 @@
 		"mcp": "tsx src/mcp/server.ts",
 		"build": "tsup src/cli.ts --format esm,cjs --dts --out-dir dist && tsup src/mcp/server.ts --format esm,cjs --dts --out-dir dist",
 		"lint": "eslint . --ext .ts",
-		"typecheck": "tsc -p tsconfig.json"
+		"typecheck": "tsc -p tsconfig.json",
+		"test": "vitest",
+		"test:run": "vitest run"
 	},
 	"dependencies": {
 		"chalk": "^5.3.0",
@@ -28,6 +30,7 @@
 		"eslint": "^9.10.0",
 		"tsx": "^4.19.0",
 		"tsup": "^8.1.0",
-		"typescript": "^5.6.3"
+		"typescript": "^5.6.3",
+		"vitest": "^2.0.0"
 	}
 }

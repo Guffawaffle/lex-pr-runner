@@ -1,0 +1,17 @@
+{
+	"target": "main",
+	"items": [
+		{
+			"id": 1,
+			"branch": "feat/a",
+			"needs": [2],
+			"strategy": "merge-weave"
+		},
+		{
+			"id": 2,
+			"branch": "feat/b",
+			"needs": [1],
+			"strategy": "merge-weave"
+		}
+	]
+}

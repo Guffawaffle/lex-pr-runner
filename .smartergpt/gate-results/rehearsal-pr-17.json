@@ -1,0 +1,13 @@
+{
+	"ts": "20250927T190805Z",
+	"base": "main",
+	"branch": "weave/rehearsal/20250927T190805Z",
+	"pr": 17,
+	"head": "copilot/fix-90355315-495b-4bd4-9127-10d3bb68b881",
+	"ready_input": 0,
+	"action": "merge",
+	"status": "merged",
+	"conflicts": [],
+	"commit_sha": "5bc0772",
+	"post_merge_gates": { "ruff": "skipped", "mypy": "skipped", "pytest": "fail" }
+}

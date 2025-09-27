@@ -2,10 +2,17 @@ node_modules/
 dist/
 coverage/
 .env
+.smartergpt/runner/
 .smartergpt/cache/
-.smartergpt/runner/logs/
-.smartergpt/runner/results/
-.smartergpt/runner/stage/
+.smartergpt/deliverables/
+
+# Keep these tracked
+!.smartergpt/intent.md
+!.smartergpt/scope.yml
+!.smartergpt/deps.yml
+!.smartergpt/gates.yml
+!.smartergpt/stack.yml
+!.smartergpt/pull-request-template.md
 .DS_Store
 *.log
 *.code-workspace
