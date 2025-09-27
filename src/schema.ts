@@ -144,9 +144,14 @@ export const Gate = z.object({
 }).strict();
 export type Gate = z.infer<typeof Gate>;
 
+/**
+ * Plan item with dependencies resolved by name.
+ * Note: Input generator defaults name := id when name is unset.
+ * All deps references must match item names in the final plan.
+ */
 export const PlanItem = z.object({
 	name: z.string(),
-	deps: z.string().array().default([]),
+	deps: z.string().array().default([]), // Dependency references by item name
 	gates: z.array(Gate).default([])
 }).strict();
 export type PlanItem = z.infer<typeof PlanItem>;

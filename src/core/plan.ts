@@ -6,6 +6,7 @@
 import { Plan, PlanItem, Gate } from "../schema.js";
 import { InputConfig, InputItem, InputGate } from "./inputs.js";
 import { stableSort } from "../util/canonicalJson.js";
+import { UnknownDependencyError } from "../mergeOrder.js";
 
 /**
  * Generate normalized plan from input configuration
@@ -16,15 +17,15 @@ export function generatePlan(inputs: InputConfig): Plan {
 	const planItems: PlanItem[] = inputs.items.map(transformInputToPlanItem);
 
 	// Sort items by name for deterministic ordering
-	const sortedItems = stableSort(planItems, (item) => item.name);
+	planItems.sort((a, b) => a.name.localeCompare(b.name));
 
 	// Validate dependencies exist
-	validateDependencies(sortedItems);
+	validateDependencies(planItems);
 
 	return {
 		schemaVersion: "1.0.0", // Current schema version
 		target: inputs.target,
-		items: sortedItems,
+		items: planItems,
 		// Policy will be added later if needed
 	};
 }
@@ -74,7 +75,7 @@ function validateDependencies(items: PlanItem[]): void {
 	for (const item of items) {
 		for (const dep of item.deps) {
 			if (!itemNames.has(dep)) {
-				throw new Error(`Unknown dependency '${dep}' for item '${item.name}'`);
+				throw new UnknownDependencyError(`Unknown dependency '${dep}' for item '${item.name}'`);
 			}
 		}
 	}

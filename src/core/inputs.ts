@@ -29,7 +29,7 @@ export interface InputConfig {
 }
 
 export interface InputItem {
-	id?: number;
+	id?: string; // Normalized to string internally
 	name: string;
 	branch?: string;
 	sha?: string;
@@ -54,7 +54,7 @@ const StackConfig = z.object({
 	version: z.number().default(1),
 	target: z.string().default("main"),
 	items: z.array(z.object({
-		id: z.number().optional(),
+		id: z.union([z.number(), z.string()]).optional(),
 		name: z.string().optional(),
 		branch: z.string(),
 		sha: z.string().optional(),
@@ -119,22 +119,27 @@ export function loadInputs(baseDir: string = "."): InputConfig {
 		const stackConfig = StackConfig.parse(stackSource.content);
 		config.version = stackConfig.version;
 		config.target = stackConfig.target;
-		config.items = stackConfig.items.map((item, index) => ({
-			id: item.id ?? index + 1,
-			name: item.name ?? item.branch,
-			branch: item.branch,
-			sha: item.sha,
-			deps: stableSort(item.deps),
-			strategy: item.strategy,
-			gates: item.gates?.map(gate => ({
-				name: gate.name,
-				run: gate.run,
-				cwd: gate.cwd,
-				env: gate.env ? sortRecord(gate.env) : {},
-				runtime: gate.runtime || "local",
-				artifacts: stableSort(gate.artifacts || [])
-			})) || []
-		}));
+		config.items = stackConfig.items.map((item, index) => {
+			const id = item.id ?? (index + 1);
+			// Normalize all IDs to strings internally to prevent comparison bugs
+			const normalizedId = String(id);
+			return {
+				id: normalizedId,
+				name: item.name ?? normalizedId,
+				branch: item.branch,
+				sha: item.sha,
+				deps: stableSort(item.deps),
+				strategy: item.strategy,
+				gates: item.gates?.map(gate => ({
+					name: gate.name,
+					run: gate.run,
+					cwd: gate.cwd,
+					env: gate.env ? sortRecord(gate.env) : {},
+					runtime: gate.runtime || "local",
+					artifacts: stableSort(gate.artifacts || [])
+				})) || []
+			};
+		});
 	} else {
 		// Fallback: try scope.yml and deps.yml
 		const scopePath = path.join(smartergptDir, "scope.yml");
@@ -154,7 +159,7 @@ export function loadInputs(baseDir: string = "."): InputConfig {
 	}
 
 	// Sort items by name for deterministic output
-	config.items = stableSort(config.items, (item) => item.name || item.branch || "");
+	config.items.sort((a, b) => (a.name || a.branch || "").localeCompare(b.name || b.branch || ""));
 	config.sources = sources;
 
 	return config;
