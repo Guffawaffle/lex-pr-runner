@@ -63,10 +63,8 @@ program
 				} catch (error) {
 					if (error instanceof SchemaValidationError) {
 						if (opts.json) {
-							const errors = error.issues.map(issue =>
-								`${issue.path.join('.')}: ${issue.message}`
-							);
-							console.log(JSON.stringify({ valid: false, errors }));
+							const errorJson = error.toJSON();
+							console.log(JSON.stringify({ valid: false, errors: errorJson.errors }, null, 2));
 						} else {
 							console.error(`✗ ${planFile} validation failed:`);
 							error.issues.forEach(issue => {
