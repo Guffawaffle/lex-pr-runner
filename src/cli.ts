@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { createPlan } from "./core/plan.js";
+import { createPlan, computePlanLevels, Plan } from "./core/plan.js";
+import { CycleError, MissingNodeError } from "./core/dag.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -18,6 +19,46 @@ program
 		const planPath = path.join(outDir, "plan.json");
 		fs.writeFileSync(planPath, JSON.stringify(plan, null, 2));
 		console.log(`Wrote ${planPath}`);
+	});
+
+program
+	.command("levels")
+	.description("Show dependency levels for a plan")
+	.argument("[plan-file]", "Path to plan.json file", "plan.json")
+	.option("--json", "Output JSON format", false)
+	.action(async (planFile: string, opts) => {
+		try {
+			if (!fs.existsSync(planFile)) {
+				console.error(`Plan file not found: ${planFile}`);
+				process.exit(1);
+			}
+
+			const planData = JSON.parse(fs.readFileSync(planFile, "utf-8")) as Plan;
+			const result = computePlanLevels(planData);
+
+			if (opts.json) {
+				console.log(JSON.stringify({
+					levels: result.levels,
+					namedLevels: result.namedLevels
+				}, null, 2));
+			} else {
+				console.log("Dependency Levels:");
+				result.namedLevels.forEach((level, index) => {
+					console.log(`  Level ${index}: ${level.join(", ")}`);
+				});
+			}
+		} catch (error) {
+			if (error instanceof CycleError) {
+				console.error(`Error: ${error.message}`);
+				process.exit(2);
+			} else if (error instanceof MissingNodeError) {
+				console.error(`Error: ${error.message}`);
+				process.exit(3);
+			} else {
+				console.error(`Unexpected error: ${error}`);
+				process.exit(1);
+			}
+		}
 	});
 
 program

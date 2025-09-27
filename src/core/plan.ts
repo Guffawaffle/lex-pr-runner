@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { buildDependencyLevels, levelsToNames } from "./dag.js";
 
 export const PlanItem = z.object({
 	id: z.number(),
@@ -21,5 +22,22 @@ export async function createPlan(): Promise<Plan> {
 	return {
 		target: "main",
 		items: []
+	};
+}
+
+/**
+ * Compute dependency levels for a plan using DAG algorithm
+ * @param plan The plan to compute levels for
+ * @returns Object containing numeric levels and named levels
+ * @throws CycleError if dependency cycle detected
+ * @throws MissingNodeError if missing dependencies
+ */
+export function computePlanLevels(plan: Plan) {
+	const numericLevels = buildDependencyLevels(plan.items);
+	const namedLevels = levelsToNames(numericLevels, plan.items);
+	
+	return {
+		levels: numericLevels,
+		namedLevels: namedLevels
 	};
 }
