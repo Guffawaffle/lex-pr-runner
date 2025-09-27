@@ -11,7 +11,7 @@ coverage/
 .vscode/
 .idea/
 
-# Python virtual environment and cache
+# Python virtual environment and cache (legacy cleanup)
 .venv/
 __pycache__/
 *.pyc
