@@ -1,0 +1,7 @@
+{
+	"target": "main",
+	"items": [
+		{ "name": "A", "repo": "org/repo", "branch": "feat/a" },
+		{ "name": "B", "repo": "org/repo", "branch": "feat/b", "deps": ["A"] }
+	]
+}

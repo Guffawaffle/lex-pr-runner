@@ -1,20 +1,32 @@
-# lex-pr-runner
+# lex-pr — PR Runner & Merge Pyramid
 
-**Lex-PR Runner** — fan-out PRs, compute a merge pyramid, run local gates, and **weave** merges cleanly.
-- CLI: `lex-pr plan|run|merge|doctor|format|ci-replay`
-- MCP server: exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`.
+> **Tagline:** Fan‑out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.
 
-## Quick start
+## Quickstart
+
 ```bash
-# dev
-npm run dev
+# Create & activate venv
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# run CLI (ts)
-npm run cli -- plan --help
+# Install (editable) + dev tools
+pip install -e ".[dev]"
 ```
 
-## Project layout
-- `src/core`: planner, gates runner, weave strategies
-- `src/cli.ts`: human CLI (Commander)
-- `src/mcp/server.ts`: MCP tool/resource surface (adapter)
-- `.smartergpt/`: canonical inputs + runner artifacts
+## Commands
+
+```bash
+# Validate a plan (non-JSON and JSON modes)
+lex-pr schema validate plan.json
+lex-pr schema validate plan.json --json
+
+# Show merge order (levels)
+lex-pr merge-order plan.json --json
+
+# Gate runner (stub in v1)
+lex-pr gate
+```
+
+## Notes
+- Deterministic > clever. Outputs are sorted for stable diffs.
+- `schemas/plan.schema.json` is the source of truth for validation.
