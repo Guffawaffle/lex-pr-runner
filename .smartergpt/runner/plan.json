@@ -1,4 +1,28 @@
 {
   "target": "main",
-  "items": []
+  "items": [
+    {
+      "id": 1,
+      "branch": "feat/a",
+      "needs": [],
+      "strategy": "rebase-weave"
+    },
+    {
+      "id": 2,
+      "branch": "feat/b",
+      "needs": [
+        1
+      ],
+      "strategy": "rebase-weave"
+    }
+  ],
+  "levels": [
+    [
+      1
+    ],
+    [
+      2
+    ]
+  ],
+  "contentHash": "d60d5f54931d19be98b799fc9ed158060e6a0716656d3afc630e27bf0efd2218"
 }

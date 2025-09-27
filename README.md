@@ -5,28 +5,46 @@
 ## Quickstart
 
 ```bash
-# Create & activate venv
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# Install dependencies
+npm install
 
-# Install (editable) + dev tools
-pip install -e ".[dev]"
+# Run CLI commands
+npm run cli -- plan --help
 ```
 
 ## Commands
 
 ```bash
-# Validate a plan (non-JSON and JSON modes)
-lex-pr schema validate plan.json
-lex-pr schema validate plan.json --json
+# Generate plan artifacts (plan.json + snapshot.md)
+npm run cli -- plan [--out <dir>]  # default: .smartergpt/runner
 
-# Show merge order (levels)
-lex-pr merge-order plan.json --json
+# Environment and config sanity checks
+npm run cli -- doctor
+```
 
-# Gate runner (stub in v1)
-lex-pr gate
+### Plan Artifacts
+
+The `plan` command generates two files:
+
+- **`plan.json`**: Machine-readable plan with target, items, levels, and content hash
+- **`snapshot.md`**: Human-readable snapshot with sections for Inputs, Levels, Items table, and Notes
+
+Both files are deterministic and hash-stable - running the command multiple times with unchanged inputs produces identical artifacts.
+
+## Development
+
+```bash
+# Type checking
+npm run typecheck
+
+# Linting
+npm run lint
+
+# Build
+npm run build
 ```
 
 ## Notes
 - Deterministic > clever. Outputs are sorted for stable diffs.
 - `schemas/plan.schema.json` is the source of truth for validation.
+- Plan artifacts use topological sorting to compute execution levels

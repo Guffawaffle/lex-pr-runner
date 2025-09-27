@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { createPlan } from "./core/plan.js";
+import { generateSnapshot } from "./core/snapshot.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -15,9 +16,17 @@ program
 		const plan = await createPlan();
 		const outDir = opts.out as string;
 		fs.mkdirSync(outDir, { recursive: true });
+		
+		// Write plan.json
 		const planPath = path.join(outDir, "plan.json");
 		fs.writeFileSync(planPath, JSON.stringify(plan, null, 2));
 		console.log(`Wrote ${planPath}`);
+		
+		// Write snapshot.md
+		const snapshotPath = path.join(outDir, "snapshot.md");
+		const snapshot = generateSnapshot(plan);
+		fs.writeFileSync(snapshotPath, snapshot);
+		console.log(`Wrote ${snapshotPath}`);
 	});
 
 program
