@@ -16,10 +16,7 @@ export const Plan = z.object({
 export type Plan = z.infer<typeof Plan>;
 
 export async function createPlan(): Promise<Plan> {
-	// TODO: read .smartergpt/stack.yml if present; otherwise combine scope.yml + deps.yml + PR metadata.
-	// For now, return a minimal placeholder plan.
-	return {
-		target: "main",
-		items: []
-	};
+	const { CanonicalInputLoader } = await import("./input-loader.js");
+	const loader = new CanonicalInputLoader();
+	return loader.loadPlan();
 }

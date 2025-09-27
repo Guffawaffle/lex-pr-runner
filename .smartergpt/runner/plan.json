@@ -1,4 +1,19 @@
 {
-  "target": "main",
-  "items": []
+  "target": "develop",
+  "items": [
+    {
+      "id": 1,
+      "branch": "feat/implement-loader",
+      "needs": [],
+      "strategy": "rebase-weave"
+    },
+    {
+      "id": 2,
+      "branch": "feat/add-tests",
+      "needs": [
+        1
+      ],
+      "strategy": "merge-weave"
+    }
+  ]
 }

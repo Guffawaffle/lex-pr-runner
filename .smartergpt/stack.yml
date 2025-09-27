@@ -1,3 +1,11 @@
 version: 1
-target: main
-prs: []
+target: develop
+prs:
+  - id: 1
+    branch: feat/implement-loader
+    needs: []
+    strategy: rebase-weave
+  - id: 2
+    branch: feat/add-tests
+    needs: [1]
+    strategy: merge-weave
