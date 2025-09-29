@@ -12,6 +12,14 @@
 
 See [`docs/TERMS.md`](docs/TERMS.md) for complete canonical terms and separation rules. Core runner (`src/**`) never stores user/work artifacts. `.smartergpt/**` contains portable example profile only.
 
+## Requirements
+
+- **Node.js**: Version specified in `.nvmrc` (currently 20.18.0)
+- **npm**: Version specified in `packageManager` field of `package.json` (currently 10.0.0)
+- **Git**: Configured with `user.name` and `user.email`
+
+Use `npm run cli -- doctor` to verify your environment meets all requirements.
+
 ## Quick start
 ```bash
 # install dependencies

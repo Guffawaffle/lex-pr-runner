@@ -372,23 +372,145 @@ program
 	.command("doctor")
 	.description("Environment and config sanity checks")
 	.action(async () => {
-		console.log("doctor: TODO — check git, node, package manager, and .smartergpt/*");
-		console.log("✓ Node.js:", process.version);
-		console.log("✓ Platform:", process.platform);
-		console.log("✓ CWD:", process.cwd());
+		let hasErrors = false;
 
-		// Check for plan.json
+		console.log("🩺 Doctor - Environment and config sanity checks");
+		console.log("");
+
+		// Check Node.js version against .nvmrc
+		try {
+			const nvmrcContent = fs.readFileSync(".nvmrc", "utf-8").trim();
+			const currentVersion = process.version.slice(1); // Remove 'v' prefix
+			const expectedVersion = nvmrcContent;
+			
+			if (currentVersion === expectedVersion) {
+				console.log(`✓ Node.js version: ${process.version} (matches .nvmrc)`);
+			} else {
+				console.log(`✗ Node.js version mismatch:`);
+				console.log(`  Current: ${process.version}`);
+				console.log(`  Expected: v${expectedVersion} (from .nvmrc)`);
+				hasErrors = true;
+			}
+		} catch (error) {
+			console.log("✗ .nvmrc file not found or unreadable");
+			console.log("✓ Node.js version:", process.version, "(no .nvmrc constraint)");
+			hasErrors = true;
+		}
+
+		// Check npm version against packageManager field
+		try {
+			const packageJson = JSON.parse(fs.readFileSync("package.json", "utf-8"));
+			const expectedNpmVersion = packageJson.packageManager?.replace("npm@", "");
+			
+			if (expectedNpmVersion) {
+				const { spawn } = await import("child_process");
+				const npmVersionProcess = spawn("npm", ["--version"], { stdio: "pipe" });
+				
+				let npmVersion = "";
+				npmVersionProcess.stdout.on("data", (data) => {
+					npmVersion += data.toString().trim();
+				});
+
+				await new Promise((resolve) => {
+					npmVersionProcess.on("close", resolve);
+				});
+
+				if (npmVersion === expectedNpmVersion) {
+					console.log(`✓ npm version: ${npmVersion} (matches packageManager)`);
+				} else {
+					console.log(`✗ npm version mismatch:`);
+					console.log(`  Current: ${npmVersion}`);
+					console.log(`  Expected: ${expectedNpmVersion} (from packageManager field)`);
+					hasErrors = true;
+				}
+			} else {
+				console.log("✓ npm version: no packageManager constraint in package.json");
+			}
+		} catch (error) {
+			console.log("✗ Could not check npm version:", error instanceof Error ? error.message : String(error));
+			hasErrors = true;
+		}
+
+		// Check git configuration
+		try {
+			const { spawn } = await import("child_process");
+			
+			// Check git user.name
+			const gitNameProcess = spawn("git", ["config", "user.name"], { stdio: "pipe" });
+			let gitName = "";
+			gitNameProcess.stdout.on("data", (data) => {
+				gitName += data.toString().trim();
+			});
+
+			await new Promise((resolve) => {
+				gitNameProcess.on("close", resolve);
+			});
+
+			// Check git user.email
+			const gitEmailProcess = spawn("git", ["config", "user.email"], { stdio: "pipe" });
+			let gitEmail = "";
+			gitEmailProcess.stdout.on("data", (data) => {
+				gitEmail += data.toString().trim();
+			});
+
+			await new Promise((resolve) => {
+				gitEmailProcess.on("close", resolve);
+			});
+
+			if (gitName && gitEmail) {
+				console.log(`✓ Git config: user.name="${gitName}", user.email="${gitEmail}"`);
+			} else {
+				console.log("✗ Git configuration incomplete:");
+				if (!gitName) console.log("  Missing user.name");
+				if (!gitEmail) console.log("  Missing user.email");
+				hasErrors = true;
+			}
+		} catch (error) {
+			console.log("✗ Could not check git configuration:", error instanceof Error ? error.message : String(error));
+			hasErrors = true;
+		}
+
+		// Check platform and working directory
+		console.log(`✓ Platform: ${process.platform}`);
+		console.log(`✓ Working directory: ${process.cwd()}`);
+
+		// Check for plan.json and validate it
 		const planExists = fs.existsSync("plan.json");
-		console.log(planExists ? "✓ plan.json found" : "✗ plan.json not found");
-
 		if (planExists) {
 			try {
 				const planContent = fs.readFileSync("plan.json", "utf-8");
 				const plan = loadPlan(planContent);
-				console.log(`✓ plan.json valid (${plan.items.length} items, schema ${plan.schemaVersion})`);
+				console.log(`✓ plan.json: valid (${plan.items.length} items, schema ${plan.schemaVersion})`);
 			} catch (error) {
 				console.log("✗ plan.json validation failed:", error instanceof Error ? error.message : String(error));
+				hasErrors = true;
 			}
+		} else {
+			console.log("ℹ plan.json: not found (run 'lex-pr plan' to generate)");
+		}
+
+		// Check .smartergpt directory structure
+		const smartergptDir = ".smartergpt";
+		if (fs.existsSync(smartergptDir)) {
+			const expectedFiles = ["intent.md", "scope.yml", "deps.yml", "gates.yml"];
+			const missingFiles = expectedFiles.filter(file => !fs.existsSync(path.join(smartergptDir, file)));
+			
+			if (missingFiles.length === 0) {
+				console.log(`✓ .smartergpt: all expected files present`);
+			} else {
+				console.log(`ℹ .smartergpt: missing optional files: ${missingFiles.join(", ")}`);
+			}
+		} else {
+			console.log("ℹ .smartergpt: directory not found (create for project configuration)");
+		}
+
+		console.log("");
+		if (hasErrors) {
+			console.log("❌ Doctor found issues that need attention");
+			process.exit(1);
+		} else {
+			console.log("✅ All checks passed - environment looks good!");
+			process.exit(0);
 		}
 	});
 
