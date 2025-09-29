@@ -12,6 +12,7 @@ import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import { createGitHubAPI, GitHubAPIError } from "./github/api.js";
 import { createGitOperations, GitOperationError } from "./git/operations.js";
+import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -618,8 +619,22 @@ program
 program
 	.command("doctor")
 	.description("Environment and config sanity checks")
-	.action(async () => {
+	.option("--bootstrap", "Create minimal workspace configuration if missing")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
 		let hasErrors = false;
+		const issues: string[] = [];
+		const suggestions: string[] = [];
+
+		if (opts.json) {
+			// JSON mode for programmatic use
+			const result = await performDoctorChecks();
+			console.log(canonicalJSONStringify(result));
+			if (result.hasErrors) {
+				process.exit(1);
+			}
+			return;
+		}
 
 		console.log("🩺 Doctor - Environment and config sanity checks");
 		console.log("");
@@ -751,13 +766,227 @@ program
 			console.log("ℹ .smartergpt: directory not found (create for project configuration)");
 		}
 
+		// Enhanced configuration checks with bootstrap
+		const bootstrap = bootstrapWorkspace();
+		const projectType = detectProjectType();
+		const envSuggestions = getEnvironmentSuggestions();
+
+		console.log(`📁 Project type: ${projectType}`);
+		console.log("");
+
+		// Configuration assessment
+		if (bootstrap.hasConfiguration) {
+			console.log("✓ .smartergpt: configuration complete");
+		} else {
+			console.log(`ℹ .smartergpt: missing ${bootstrap.missingFiles.length} files`);
+			bootstrap.missingFiles.forEach(file => {
+				console.log(`  - ${file}`);
+			});
+			
+			if (opts.bootstrap) {
+				console.log("");
+				console.log("🔧 Creating minimal workspace configuration...");
+				createMinimalWorkspace();
+				console.log("✓ Minimal configuration created");
+			} else {
+				console.log("");
+				console.log("💡 Use --bootstrap to create minimal configuration");
+			}
+		}
+
+		// Environment suggestions
+		if (envSuggestions.length > 0) {
+			console.log("");
+			console.log("💡 Environment suggestions:");
+			envSuggestions.forEach(suggestion => {
+				console.log(`  - ${suggestion}`);
+			});
+		}
+
+		// GitHub integration check
+		try {
+			const githubAPI = await createGitHubAPI();
+			if (githubAPI) {
+				const authStatus = await githubAPI.checkAuth();
+				if (authStatus.authenticated) {
+					console.log(`✓ GitHub: authenticated as ${authStatus.user}`);
+				} else {
+					console.log("ℹ GitHub: not authenticated (set GITHUB_TOKEN for API access)");
+				}
+			} else {
+				console.log("ℹ GitHub: repository not detected or not GitHub-hosted");
+			}
+		} catch (error) {
+			console.log(`ℹ GitHub: integration check failed (${error instanceof Error ? error.message : String(error)})`);
+		}
+
+		// Git operations check
+		try {
+			const gitOps = createGitOperations();
+			const isClean = await gitOps.isClean();
+			const currentBranch = await gitOps.getCurrentBranch();
+			
+			console.log(`✓ Git: working directory ${isClean ? 'clean' : 'has changes'}`);
+			console.log(`✓ Git: current branch '${currentBranch}'`);
+		} catch (error) {
+			console.log(`✗ Git: operations check failed (${error instanceof Error ? error.message : String(error)})`);
+			hasErrors = true;
+		}
+
 		console.log("");
 		if (hasErrors) {
 			console.log("❌ Doctor found issues that need attention");
 			process.exit(1);
 		} else {
 			console.log("✅ All checks passed - environment looks good!");
+			
+			if (!bootstrap.hasConfiguration) {
+				console.log("");
+				console.log("Next steps:");
+				console.log("1. Run 'lex-pr doctor --bootstrap' to create minimal configuration");
+				console.log("2. Customize .smartergpt/ files for your project");
+				console.log("3. Run 'lex-pr discover' to find open PRs");
+			}
+			
 			process.exit(0);
+		}
+	});
+
+async function performDoctorChecks(): Promise<any> {
+	const checks: any = {
+		hasErrors: false,
+		issues: [],
+		suggestions: [],
+	};
+
+	// Node.js version check
+	try {
+		const nvmrcContent = fs.readFileSync(".nvmrc", "utf-8").trim();
+		const currentVersion = process.version.slice(1);
+		const expectedVersion = nvmrcContent;
+		
+		if (currentVersion === expectedVersion) {
+			checks.nodejs = { status: "ok", current: process.version, expected: `v${expectedVersion}` };
+		} else {
+			checks.nodejs = { status: "mismatch", current: process.version, expected: `v${expectedVersion}` };
+			checks.hasErrors = true;
+			checks.issues.push(`Node.js version mismatch: ${process.version} vs v${expectedVersion}`);
+		}
+	} catch (error) {
+		checks.nodejs = { status: "no_constraint", current: process.version };
+		checks.suggestions.push("Consider adding .nvmrc file for Node.js version consistency");
+	}
+
+	// Configuration check
+	const bootstrap = bootstrapWorkspace();
+	checks.configuration = {
+		hasConfiguration: bootstrap.hasConfiguration,
+		missingFiles: bootstrap.missingFiles,
+		suggestions: bootstrap.suggestions,
+	};
+
+	// Project type detection
+	checks.projectType = detectProjectType();
+
+	// Environment suggestions
+	checks.environmentSuggestions = getEnvironmentSuggestions();
+
+	// GitHub integration
+	try {
+		const githubAPI = await createGitHubAPI();
+		if (githubAPI) {
+			const authStatus = await githubAPI.checkAuth();
+			checks.github = {
+				detected: true,
+				authenticated: authStatus.authenticated,
+				user: authStatus.user,
+			};
+		} else {
+			checks.github = { detected: false };
+		}
+	} catch (error) {
+		checks.github = { detected: false, error: error instanceof Error ? error.message : String(error) };
+	}
+
+	// Git operations
+	try {
+		const gitOps = createGitOperations();
+		const isClean = await gitOps.isClean();
+		const currentBranch = await gitOps.getCurrentBranch();
+		
+		checks.git = {
+			status: "ok",
+			isClean,
+			currentBranch,
+		};
+	} catch (error) {
+		checks.git = { 
+			status: "error", 
+			error: error instanceof Error ? error.message : String(error) 
+		};
+		checks.hasErrors = true;
+		checks.issues.push(`Git operations failed: ${error instanceof Error ? error.message : String(error)}`);
+	}
+
+	return checks;
+}
+
+// Bootstrap command
+program
+	.command("bootstrap")
+	.description("Create minimal workspace configuration")
+	.option("--force", "Overwrite existing configuration files")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
+		try {
+			const bootstrap = bootstrapWorkspace();
+			const projectType = detectProjectType();
+
+			if (opts.json) {
+				if (bootstrap.hasConfiguration && !opts.force) {
+					console.log(canonicalJSONStringify({
+						status: "exists",
+						message: "Configuration already exists",
+						bootstrap,
+						projectType,
+					}));
+				} else {
+					createMinimalWorkspace();
+					console.log(canonicalJSONStringify({
+						status: "created",
+						message: "Minimal configuration created",
+						projectType,
+						filesCreated: bootstrap.missingFiles,
+					}));
+				}
+			} else {
+				console.log("🚀 Bootstrapping workspace configuration");
+				console.log(`📁 Project type detected: ${projectType}`);
+				console.log("");
+
+				if (bootstrap.hasConfiguration && !opts.force) {
+					console.log("✓ Configuration already exists");
+					console.log(`  ${bootstrap.profileDir}/`);
+					console.log("");
+					console.log("Use --force to overwrite existing files");
+				} else {
+					createMinimalWorkspace();
+					console.log("✓ Created minimal configuration:");
+					console.log(`  ${bootstrap.profileDir}/intent.md`);
+					console.log(`  ${bootstrap.profileDir}/scope.yml`);
+					console.log(`  ${bootstrap.profileDir}/deps.yml`);
+					console.log(`  ${bootstrap.profileDir}/gates.yml`);
+					console.log("");
+					console.log("Next steps:");
+					console.log("1. Edit .smartergpt/intent.md to describe your project goals");
+					console.log("2. Update .smartergpt/scope.yml for PR discovery rules");
+					console.log("3. Configure .smartergpt/gates.yml for quality gates");
+					console.log("4. Run 'lex-pr doctor' to verify configuration");
+				}
+			}
+		} catch (error) {
+			console.error(`Error bootstrapping workspace: ${error instanceof Error ? error.message : String(error)}`);
+			process.exit(1);
 		}
 	});
 
