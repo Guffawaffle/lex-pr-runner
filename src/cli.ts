@@ -10,6 +10,7 @@ import { generatePlan, generateEmptyPlan } from "./core/plan.js";
 import { generateSnapshot, generatePlanSummary } from "./core/snapshot.js";
 import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
+import { createGitHubAPI, GitHubAPIError } from "./github/api.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -387,6 +388,80 @@ program
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error(`Error aggregating gate reports: ${message}`);
+			process.exit(1);
+		}
+	});
+
+// Discover command - GitHub PR discovery
+program
+	.command("discover")
+	.description("Discover open pull requests from GitHub")
+	.option("--owner <owner>", "GitHub repository owner")
+	.option("--repo <repo>", "GitHub repository name")
+	.option("--state <state>", "PR state filter", "open")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
+		try {
+			let githubAPI = await createGitHubAPI();
+			
+			// Override with command line options if provided
+			if (opts.owner && opts.repo) {
+				const { GitHubAPI } = await import("./github/api.js");
+				githubAPI = new GitHubAPI({
+					owner: opts.owner,
+					repo: opts.repo,
+					token: process.env.GITHUB_TOKEN,
+				});
+			}
+
+			if (!githubAPI) {
+				console.error("Error: Could not detect GitHub repository.");
+				console.error("Please specify --owner and --repo options or run from a GitHub repository.");
+				process.exit(1);
+			}
+
+			// Check authentication
+			const authStatus = await githubAPI.checkAuth();
+			if (!authStatus.authenticated) {
+				console.warn("Warning: GitHub API not authenticated. Set GITHUB_TOKEN environment variable for better rate limits.");
+			}
+
+			// Fetch pull requests
+			const pullRequests = await githubAPI.discoverPullRequests(opts.state as "open" | "closed" | "all");
+
+			if (opts.json) {
+				console.log(canonicalJSONStringify({
+					pullRequests,
+					total: pullRequests.length,
+					authenticated: authStatus.authenticated,
+					user: authStatus.user
+				}));
+			} else {
+				console.log(`🔍 Discovered ${pullRequests.length} ${opts.state} pull requests`);
+				if (authStatus.authenticated) {
+					console.log(`✓ Authenticated as: ${authStatus.user}`);
+				}
+				console.log("");
+
+				if (pullRequests.length === 0) {
+					console.log("No pull requests found.");
+				} else {
+					console.log("| PR# | Title | Branch | Author | Labels |");
+					console.log("|-----|-------|--------|--------|--------|");
+
+					for (const pr of pullRequests) {
+						const labels = pr.labels.length > 0 ? pr.labels.join(", ") : "none";
+						const title = pr.title.length > 50 ? pr.title.substring(0, 47) + "..." : pr.title;
+						console.log(`| #${pr.number} | ${title} | ${pr.branch} | ${pr.author} | ${labels} |`);
+					}
+				}
+			}
+		} catch (error) {
+			if (error instanceof GitHubAPIError) {
+				console.error(`GitHub API Error: ${error.message}`);
+				process.exit(1);
+			}
+			console.error(`Error discovering pull requests: ${error instanceof Error ? error.message : String(error)}`);
 			process.exit(1);
 		}
 	});
