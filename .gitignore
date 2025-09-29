@@ -51,3 +51,7 @@ plan-*.json
 *.code-workspace
 .vscode/
 .idea/
+
+*real-pr-plan.json
+test-artifacts/*
+tool-assessment-report.md
