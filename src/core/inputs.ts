@@ -125,7 +125,7 @@ export function loadInputs(baseDir: string = "."): InputConfig {
 			const normalizedId = String(id);
 			return {
 				id: normalizedId,
-				name: item.name ?? undefined,
+				name: item.name ?? normalizedId,
 				branch: item.branch,
 				sha: item.sha,
 				deps: stableSort(item.deps),

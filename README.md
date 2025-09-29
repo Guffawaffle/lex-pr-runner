@@ -1,8 +1,16 @@
 # lex-pr-runner
 
-**Lex-PR Runner** — fan-out PRs, compute a merge pyramid, run local gates, and **weave** merges cleanly.
-- CLI: `lex-pr plan|run|merge|doctor|format|ci-replay`
-- MCP server: exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`.
+**Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.**
+
+## Components
+
+- **Runner CLI**: TypeScript command-line app under `src/**`. Commands: `plan|run|merge|doctor|format|ci-replay` + `execute|merge-order|report|status|schema`
+- **MCP server**: Optional read-only adapter at `src/mcp/server.ts`. Exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`
+- **Workspace profile**: Portable example profile under `.smartergpt/**`. Configuration inputs the runner consumes
+
+## Two-track separation (firm)
+
+See [`docs/TERMS.md`](docs/TERMS.md) for complete canonical terms and separation rules. Core runner (`src/**`) never stores user/work artifacts. `.smartergpt/**` contains portable example profile only.
 
 ## Quick start
 ```bash
@@ -35,10 +43,50 @@ npm run cli -- plan --out ./my-artifacts
 # Environment and config sanity checks
 npm run cli -- doctor
 
+# Gate report aggregation
+npm run cli -- report <directory> [--out json|md]
+
 # Python CLI (legacy)
 lex-pr schema validate plan.json
 lex-pr merge-order plan.json --json
 ```
+
+### Gate Report Aggregation
+
+The `report` command aggregates gate results from a directory of JSON files:
+
+```bash
+# Aggregate gate reports (JSON output)
+npm run cli -- report ./gate-results --out json
+
+# Generate markdown summary
+npm run cli -- report ./gate-results --out md
+```
+
+**Gate Result Format:**
+Each gate result file must follow the JSON schema with stable keys:
+```json
+{
+  "item": "item-name",
+  "gate": "gate-name",
+  "status": "pass|fail",
+  "duration_ms": 1000,
+  "started_at": "2024-01-15T10:30:00Z",
+  "stderr_path": "/path/to/stderr.log",  // optional
+  "stdout_path": "/path/to/stdout.log",  // optional
+  "meta": {                              // optional
+    "exit_code": "0",
+    "command": "npm test"
+  }
+}
+```
+
+**Features:**
+- Stable, deterministic output with sorted items and gates
+- Validation against JSON schema
+- Summary statistics (allGreen, pass/fail counts)
+- Multiple output formats (JSON, Markdown)
+- Exit code 0 if all gates pass, 1 if any fail
 
 ## Configuration
 
