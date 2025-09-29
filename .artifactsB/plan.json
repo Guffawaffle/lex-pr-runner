@@ -3,17 +3,17 @@
     {
       "deps": [],
       "gates": [],
-      "name": "feature/auth-system"
+      "name": "1"
     },
     {
       "deps": [],
       "gates": [],
-      "name": "feature/api-endpoints"
+      "name": "2"
     },
     {
       "deps": [],
       "gates": [],
-      "name": "feature/frontend-ui"
+      "name": "3"
     }
   ],
   "schemaVersion": "1.0.0",
