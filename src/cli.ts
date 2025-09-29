@@ -9,6 +9,7 @@ import { loadInputs } from "./core/inputs.js";
 import { generatePlan, generateEmptyPlan } from "./core/plan.js";
 import { generateSnapshot, generatePlanSummary } from "./core/snapshot.js";
 import { canonicalJSONStringify } from "./util/canonicalJson.js";
+import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -334,6 +335,35 @@ program
 			} else {
 				process.exit(1);
 			}
+		}
+	});
+
+// Report command
+program
+	.command("report")
+	.description("Aggregate gate reports from directory")
+	.argument("<dir>", "Directory containing *.json gate result files")
+	.option("--out <format>", "Output format: 'json' or 'md'", "json")
+	.action((dir: string, opts) => {
+		try {
+			const report = readGateDir(dir);
+			
+			if (opts.out === 'md') {
+				const markdown = generateMarkdownSummary(report);
+				console.log(markdown);
+			} else if (opts.out === 'json') {
+				console.log(canonicalJSONStringify(report));
+			} else {
+				console.error(`Invalid output format: ${opts.out}. Use 'json' or 'md'.`);
+				process.exit(1);
+			}
+			
+			// Exit with error code if not all green
+			process.exit(report.allGreen ? 0 : 1);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(`Error aggregating gate reports: ${message}`);
+			process.exit(1);
 		}
 	});
 
