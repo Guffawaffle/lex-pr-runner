@@ -50,9 +50,28 @@ export interface InputGate {
 /**
  * Configuration schemas for validation
  */
-const StackConfig = z.object({
+export const StackConfig = z.object({
 	version: z.number().default(1),
 	target: z.string().default("main"),
+	policy: z.object({
+		requiredGates: z.array(z.string()).default([]),
+		optionalGates: z.array(z.string()).default([]),
+		maxWorkers: z.number().int().min(1).default(1),
+		retries: z.record(z.object({
+			maxAttempts: z.number().int().min(1).default(1),
+			backoffSeconds: z.number().min(0).default(0)
+		})).default({}),
+		overrides: z.object({
+			adminGreen: z.object({
+				allowedUsers: z.array(z.string()).optional(),
+				requireReason: z.boolean().default(false)
+			}).optional()
+		}).default({}),
+		blockOn: z.array(z.string()).default([]),
+		mergeRule: z.object({
+			type: z.enum(["strict-required"]).default("strict-required")
+		}).default({ type: "strict-required" })
+	}).optional(),
 	items: z.array(z.object({
 		id: z.union([z.number(), z.string()]).optional(),
 		name: z.string().optional(),
@@ -71,7 +90,7 @@ const StackConfig = z.object({
 	})).default([])
 }).strict();
 
-const ScopeConfig = z.object({
+export const ScopeConfig = z.object({
 	version: z.number().default(1),
 	target: z.string().default("main"),
 	sources: z.array(z.object({
@@ -110,46 +129,60 @@ export function loadInputs(baseDir: string = "."): InputConfig {
 		sources: []
 	};
 
+	let stackConfigLoaded = false;
+
 	// Load stack.yml (highest precedence)
 	const stackPath = path.join(smartergptDir, "stack.yml");
 	const stackSource = loadConfigFile(stackPath);
 	sources.push(stackSource);
 
-	if (stackSource.exists) {
-		const stackConfig = StackConfig.parse(stackSource.content);
-		config.version = stackConfig.version;
-		config.target = stackConfig.target;
-		config.items = stackConfig.items.map((item, index) => {
-			const id = item.id ?? (index + 1);
-			// Normalize all IDs to strings internally to prevent comparison bugs
-			const normalizedId = String(id);
-			return {
-				id: normalizedId,
-				name: item.name ?? normalizedId,
-				branch: item.branch,
-				sha: item.sha,
-				deps: stableSort(item.deps),
-				strategy: item.strategy,
-				gates: item.gates?.map(gate => ({
-					name: gate.name,
-					run: gate.run,
-					cwd: gate.cwd,
-					env: gate.env ? sortRecord(gate.env) : {},
-					runtime: gate.runtime || "local",
-					artifacts: stableSort(gate.artifacts || [])
-				})) || []
-			};
-		});
-	} else {
+	if (stackSource.exists && stackSource.content !== null) {
+		try {
+			const stackConfig = StackConfig.parse(stackSource.content);
+			config.version = stackConfig.version;
+			config.target = stackConfig.target;
+			config.items = stackConfig.items.map((item, index) => {
+				const id = item.id ?? (index + 1);
+				// Normalize all IDs to strings internally to prevent comparison bugs
+				const normalizedId = String(id);
+				return {
+					id: normalizedId,
+					name: item.name ?? normalizedId,
+					branch: item.branch,
+					sha: item.sha,
+					deps: stableSort(item.deps),
+					strategy: item.strategy,
+					gates: item.gates?.map(gate => ({
+						name: gate.name,
+						run: gate.run,
+						cwd: gate.cwd,
+						env: gate.env ? sortRecord(gate.env) : {},
+						runtime: gate.runtime || "local",
+						artifacts: stableSort(gate.artifacts || [])
+					})) || []
+				};
+			});
+			stackConfigLoaded = true;
+		} catch (error) {
+			// If stack.yml exists but has validation errors, fall back to scope.yml
+			console.warn(`Warning: stack.yml validation failed, falling back to scope.yml: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	if (!stackConfigLoaded) {
 		// Fallback: try scope.yml and deps.yml
 		const scopePath = path.join(smartergptDir, "scope.yml");
 		const scopeSource = loadConfigFile(scopePath);
 		sources.push(scopeSource);
 
-		if (scopeSource.exists) {
-			const scopeConfig = ScopeConfig.parse(scopeSource.content);
-			config.target = scopeConfig.target;
-			config.version = scopeConfig.version;
+		if (scopeSource.exists && scopeSource.content !== null) {
+			try {
+				const scopeConfig = ScopeConfig.parse(scopeSource.content);
+				config.target = scopeConfig.target;
+				config.version = scopeConfig.version;
+			} catch (error) {
+				console.warn(`Warning: scope.yml validation failed: ${error instanceof Error ? error.message : String(error)}`);
+			}
 		}
 
 		// deps.yml would be loaded here if it existed
