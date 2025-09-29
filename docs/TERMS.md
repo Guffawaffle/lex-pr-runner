@@ -15,10 +15,10 @@
 - **Integration branch**: Temporary branch used to weave/verify a batch of items before merging to `main`.
 
 ## Repo Rules (Firm)
-- **Two-track separation**  
-  - **Core runner** (`src/**`, CLI, MCP, packaging). **Never** store user/work artifacts.  
-  - **`.smartergpt/**` = portable example profile only.  
-    - **Track:** `intent.md`, `scope.yml`, `deps.yml`, `gates.yml`, `stack.yml`, `pull-request-template.md`  
+- **Two-track separation**
+  - **Core runner** (`src/**`, CLI, MCP, packaging). **Never** store user/work artifacts.
+  - **`.smartergpt/**` = portable example profile only.
+    - **Track:** `intent.md`, `scope.yml`, `deps.yml`, `gates.yml`, `stack.yml`, `pull-request-template.md`
     - **Ignore:** `.smartergpt/runner/`, `cache/`, `deliverables/` (deliverables are posted as PR comments, not committed).
 
 ## Commit Style
