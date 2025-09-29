@@ -1,6 +1,15 @@
-# Copilot — Repository Instructions (lex-pr-runner)
+# GitHub Copilot Instructions for lex-pr-runner
 
-**North star:** *Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.*
+**North Star:** *Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.*
+
+## Naming Quick Reference
+
+Use canonical terms per [`docs/TERMS.md`](../docs/TERMS.md):
+
+- **lex-pr-runner (project/repo)**: The repository you're reading
+- **Runner CLI (core runner)**: TypeScript command-line app under `src/**`
+- **MCP server (adapter)**: Optional read-only adapter at `src/mcp/server.ts`
+- **Workspace profile**: Portable example profile under `.smartergpt/**`
 
 ## Architecture guardrails
 - **Two-track separation (firm):**
@@ -11,17 +20,17 @@
 ## Build & test
 - **Node:** 20 LTS.
 - **Install:** `npm ci`
-- **Common scripts:**  
-  - Lint: `npm run lint`  
-  - Types: `npm run typecheck`  
-  - Test: `npm test`  
+- **Common scripts:**
+  - Lint: `npm run lint`
+  - Types: `npm run typecheck`
+  - Test: `npm test`
   - Build: `npm run build`
 - **Determinism check:** After `npm run build && npm run format`, the tree must be clean: `git diff --exit-code`.
 
 ## PR conventions
 - **One PR = One chat.** Keep scope tight and acceptance criteria explicit.
 - Add a **"How to verify"** section (exact commands + expected outcomes).
-- Commits use **imperative mood** ("Add…", "Fix…", "Update…").
+- **Commit style**: imperative mood ("Add…", "Fix…", "Update…") with optional prefixes (`runner:`, `mcp:`, `schema:`, `tests:`, `ci:`, `docs:`, `workspace:`).
 - Prefer **plan + tests first** when requested (it's common here).
 
 ## Tasks Copilot should prioritize

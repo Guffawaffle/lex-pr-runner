@@ -2,10 +2,15 @@
 
 **Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.**
 
-**CLI Commands:**
-- Core: `lex-pr plan|run|merge|doctor|format|ci-replay`
-- Extended: `lex-pr execute|merge-order|report|status|schema`
-- MCP server: exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`.
+## Components
+
+- **Runner CLI**: TypeScript command-line app under `src/**`. Commands: `plan|run|merge|doctor|format|ci-replay` + `execute|merge-order|report|status|schema`
+- **MCP server**: Optional read-only adapter at `src/mcp/server.ts`. Exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`
+- **Workspace profile**: Portable example profile under `.smartergpt/**`. Configuration inputs the runner consumes
+
+## Two-track separation (firm)
+
+See [`docs/TERMS.md`](docs/TERMS.md) for complete canonical terms and separation rules. Core runner (`src/**`) never stores user/work artifacts. `.smartergpt/**` contains portable example profile only.
 
 ## Quick start
 ```bash
