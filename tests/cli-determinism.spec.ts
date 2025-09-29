@@ -55,7 +55,7 @@ items:
 			// Generate plan first
 			const planOutput1 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
 			const planOutput2 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
-			
+
 			expect(planOutput1).toBe(planOutput2);
 			expect(sha256(Buffer.from(planOutput1))).toBe(sha256(Buffer.from(planOutput2)));
 
@@ -65,21 +65,21 @@ items:
 			// Test merge-order determinism
 			const mergeOutput1 = execSync(`node ${cliPath} merge-order plan.json --json`, { encoding: 'utf8' });
 			const mergeOutput2 = execSync(`node ${cliPath} merge-order plan.json --json`, { encoding: 'utf8' });
-			
+
 			expect(mergeOutput1).toBe(mergeOutput2);
 			expect(sha256(Buffer.from(mergeOutput1))).toBe(sha256(Buffer.from(mergeOutput2)));
 
 			// Test status determinism
 			const statusOutput1 = execSync(`node ${cliPath} status plan.json --json`, { encoding: 'utf8' });
 			const statusOutput2 = execSync(`node ${cliPath} status plan.json --json`, { encoding: 'utf8' });
-			
+
 			expect(statusOutput1).toBe(statusOutput2);
 			expect(sha256(Buffer.from(statusOutput1))).toBe(sha256(Buffer.from(statusOutput2)));
 
 			// Test execute dry-run determinism
 			const executeOutput1 = execSync(`node ${cliPath} execute plan.json --dry-run --json`, { encoding: 'utf8' });
 			const executeOutput2 = execSync(`node ${cliPath} execute plan.json --dry-run --json`, { encoding: 'utf8' });
-			
+
 			expect(executeOutput1).toBe(executeOutput2);
 			expect(sha256(Buffer.from(executeOutput1))).toBe(sha256(Buffer.from(executeOutput2)));
 		});
@@ -123,7 +123,7 @@ items:
 			// Verify dependency ordering is deterministic
 			const plan = JSON.parse(outputs[0]);
 			const itemNames = plan.items.map((item: any) => item.name);
-			
+
 			// Should be sorted by name for deterministic ordering
 			const sortedNames = [...itemNames].sort();
 			expect(itemNames).toEqual(sortedNames);
@@ -135,7 +135,7 @@ items:
 			// Create test configs in multiple directories
 			const dir1 = path.join(testDir, 'workspace1');
 			const dir2 = path.join(testDir, 'workspace2');
-			
+
 			for (const dir of [dir1, dir2]) {
 				fs.mkdirSync(dir, { recursive: true });
 				fs.mkdirSync(path.join(dir, '.smartergpt'), { recursive: true });
@@ -152,7 +152,7 @@ items:
 			// Generate plans from different directories
 			process.chdir(dir1);
 			const output1 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
-			
+
 			process.chdir(dir2);
 			const output2 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
 
@@ -173,7 +173,7 @@ items:
 			// Generate baseline output
 			const baselineEnv = { ...process.env };
 			delete baselineEnv.HOME; // Remove potentially variable env var
-			const baseline = execSync(`node ${cliPath} plan --json`, { 
+			const baseline = execSync(`node ${cliPath} plan --json`, {
 				encoding: 'utf8',
 				env: baselineEnv
 			});
@@ -197,11 +197,11 @@ items:
 		it('should be affected only by relevant environment variables', () => {
 			// The CLI primarily depends on the working directory, not LEX_PROFILE_DIR
 			// This test verifies that outputs change when the configuration changes
-			
+
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
 version: 1
-target: main  
+target: main
 items:
   - id: single-item
     branch: feat/single
@@ -209,7 +209,7 @@ items:
 `);
 
 			const singleItemOutput = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
-			
+
 			// Update configuration to have more items
 			fs.writeFileSync('.smartergpt/stack.yml', `
 version: 1
@@ -250,7 +250,7 @@ items:
   - id: repeat-test-1
     branch: feat/repeat-1
     deps: []
-  - id: repeat-test-2  
+  - id: repeat-test-2
     branch: feat/repeat-2
     deps: [repeat-test-1]
 `);
@@ -258,11 +258,11 @@ items:
 			// Run plan generation many times
 			const outputs = [];
 			const hashes = [];
-			
+
 			for (let i = 0; i < 10; i++) {
 				const output = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
 				const hash = sha256(Buffer.from(output));
-				
+
 				outputs.push(output);
 				hashes.push(hash);
 			}
@@ -276,7 +276,7 @@ items:
 
 		it('should maintain consistency with file system state changes', () => {
 			fs.mkdirSync('.smartergpt', { recursive: true });
-			
+
 			const config = `
 version: 1
 target: main
@@ -327,13 +327,13 @@ items:
 
 			for (const command of commands) {
 				const output = execSync(command, { encoding: 'utf8' });
-				
+
 				// All JSON outputs should end with newline
 				expect(output.endsWith('\n')).toBe(true);
-				
+
 				// Should be parseable as JSON
 				expect(() => JSON.parse(output)).not.toThrow();
-				
+
 				// Should be properly formatted (test passes if no exception)
 				const parsed = JSON.parse(output);
 				expect(parsed).toBeDefined();
@@ -352,13 +352,13 @@ items:
 `);
 
 			const output = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
-			
+
 			// Verify key ordering is consistent with canonical JSON
 			const parsed = JSON.parse(output);
 			const reordered = JSON.parse(JSON.stringify(parsed)); // This might change order
 			const canonicalOriginal = canonicalJSONStringify(parsed);
 			const canonicalReordered = canonicalJSONStringify(reordered);
-			
+
 			expect(canonicalOriginal).toBe(canonicalReordered);
 			expect(output).toBe(canonicalOriginal);
 		});
@@ -369,11 +369,12 @@ items:
 			// Create invalid plan file
 			fs.writeFileSync('invalid-plan.json', '{"malformed": "json"');
 
-			let error1: string, error2: string;
-			
+			let error1: string = '';
+			let error2: string = '';
+
 			// Run schema validation twice and capture errors
 			try {
-				execSync(`node ${cliPath} schema validate invalid-plan.json --json`, { 
+				execSync(`node ${cliPath} schema validate invalid-plan.json --json`, {
 					encoding: 'utf8',
 					stdio: 'pipe'
 				});
@@ -382,7 +383,7 @@ items:
 			}
 
 			try {
-				execSync(`node ${cliPath} schema validate invalid-plan.json --json`, { 
+				execSync(`node ${cliPath} schema validate invalid-plan.json --json`, {
 					encoding: 'utf8',
 					stdio: 'pipe'
 				});
@@ -392,7 +393,7 @@ items:
 
 			// Error outputs should be identical
 			expect(error1!).toBe(error2!);
-			
+
 			// Should still be valid JSON even for errors
 			if (error1) {
 				expect(() => JSON.parse(error1)).not.toThrow();
@@ -402,7 +403,7 @@ items:
 		it('should not include timestamps or random elements in error output', () => {
 			fs.writeFileSync('nonexistent-ref.json', `{
   "schemaVersion": "1.0.0",
-  "target": "main", 
+  "target": "main",
   "items": [
     {
       "name": "test",
