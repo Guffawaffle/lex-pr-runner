@@ -11,6 +11,7 @@ import { generateSnapshot, generatePlanSummary } from "./core/snapshot.js";
 import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import { createGitHubAPI, GitHubAPIError } from "./github/api.js";
+import { createGitOperations, GitOperationError } from "./git/operations.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -462,6 +463,153 @@ program
 				process.exit(1);
 			}
 			console.error(`Error discovering pull requests: ${error instanceof Error ? error.message : String(error)}`);
+			process.exit(1);
+		}
+	});
+
+// Merge command - Execute merge pyramid with git operations
+program
+	.command("merge")
+	.description("Execute merge pyramid with git operations")
+	.option("--plan <file>", "Path to plan.json file", "plan.json")
+	.option("--dry-run", "Show what would be merged without executing", true)
+	.option("--execute", "Actually perform merge operations")
+	.option("--cleanup", "Clean up integration branches after execution")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
+		try {
+			// Load plan
+			if (!fs.existsSync(opts.plan)) {
+				console.error(`Error: Plan file ${opts.plan} not found`);
+				process.exit(1);
+			}
+
+			const planContent = fs.readFileSync(opts.plan, "utf-8");
+			const plan = loadPlan(planContent);
+
+			// Compute merge order
+			const levels = computeMergeOrder(plan);
+
+			// Initialize git operations
+			const gitOps = createGitOperations();
+
+			// Check git status
+			const isClean = await gitOps.isClean();
+			if (!isClean && opts.execute) {
+				console.error("Error: Working directory is not clean. Please commit or stash changes.");
+				process.exit(1);
+			}
+
+			const currentBranch = await gitOps.getCurrentBranch();
+
+			if (opts.dryRun && !opts.execute) {
+				// Dry run mode (default)
+				if (opts.json) {
+					console.log(canonicalJSONStringify({
+						mode: "dry-run",
+						plan: {
+							target: plan.target,
+							items: plan.items.length,
+						},
+						levels: levels.map((level, index) => ({
+							level: index + 1,
+							items: level,
+							count: level.length,
+						})),
+						currentBranch,
+						isClean,
+					}));
+				} else {
+					console.log(`🔍 DRY RUN MODE - Merge plan for ${plan.items.length} items → ${plan.target}`);
+					console.log(`Current branch: ${currentBranch}`);
+					console.log(`Working directory: ${isClean ? 'clean' : 'has changes'}`);
+					console.log("");
+
+					levels.forEach((level, index) => {
+						console.log(`Level ${index + 1}: would merge items [${level.join(', ')}]`);
+					});
+
+					console.log("");
+					console.log("Use --execute to perform actual merges");
+				}
+			} else if (opts.execute) {
+				// Execute mode
+				if (opts.json) {
+					console.log(canonicalJSONStringify({ mode: "execute", status: "starting" }));
+				} else {
+					console.log(`🚀 EXECUTE MODE - Starting merge pyramid execution`);
+					console.log(`Target: ${plan.target}`);
+					console.log(`Items: ${plan.items.length}`);
+					console.log(`Levels: ${levels.length}`);
+					console.log("");
+				}
+
+				// Execute weave
+				const result = await gitOps.executeWeave(plan, levels);
+
+				if (opts.json) {
+					console.log(canonicalJSONStringify({
+						mode: "execute",
+						status: "completed",
+						result: {
+							successful: result.successful,
+							failed: result.failed,
+							conflicts: result.conflicts,
+							totalOperations: result.totalOperations,
+						},
+						operations: result.operations.map(op => ({
+							item: op.item.name,
+							success: op.success,
+							conflicts: op.conflicts,
+							message: op.message,
+							sha: op.sha,
+						})),
+					}));
+				} else {
+					console.log("");
+					console.log("## Execution Results");
+					console.log("");
+					console.log("| Item | Status | Message | SHA |");
+					console.log("|------|--------|---------|-----|");
+
+					for (const operation of result.operations) {
+						const status = operation.success ? "✓" : "✗";
+						const sha = operation.sha ? operation.sha.substring(0, 8) : "—";
+						const message = operation.message || "—";
+						console.log(`| ${operation.item.name} | ${status} | ${message} | ${sha} |`);
+					}
+
+					console.log("");
+					console.log("### Summary");
+					console.log(`- **Successful**: ${result.successful}/${result.totalOperations}`);
+					console.log(`- **Failed**: ${result.failed}/${result.totalOperations}`);
+					console.log(`- **Conflicts**: ${result.conflicts}/${result.totalOperations}`);
+
+					if (result.failed > 0) {
+						console.log("");
+						console.log("❌ Merge pyramid execution completed with failures");
+						process.exit(1);
+					} else {
+						console.log("");
+						console.log("✅ Merge pyramid execution completed successfully");
+					}
+				}
+
+				// Cleanup if requested
+				if (opts.cleanup) {
+					await gitOps.cleanup();
+					if (!opts.json) {
+						console.log("🧹 Cleaned up integration branches");
+					}
+				}
+			}
+
+		} catch (error) {
+			if (error instanceof GitOperationError) {
+				console.error(`Git Operation Error: ${error.message}`);
+				process.exit(1);
+			}
+			console.error(`Error executing merge: ${error instanceof Error ? error.message : String(error)}`);
 			process.exit(1);
 		}
 	});
