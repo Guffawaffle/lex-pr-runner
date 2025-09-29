@@ -211,20 +211,44 @@ program
 			const levels = computeMergeOrder(plan);
 
 			if (opts.dryRun) {
-				console.log("Dry run - Plan validation successful");
-				console.log(`Plan contains ${plan.items.length} items in ${levels.length} levels:`);
-				levels.forEach((level: string[], index: number) => {
-					console.log(`  Level ${index + 1}: [${level.join(', ')}]`);
-				});
+				if (opts.json) {
+					const output = {
+						dryRun: true,
+						plan: {
+							schemaVersion: plan.schemaVersion,
+							target: plan.target,
+							itemCount: plan.items.length
+						},
+						execution: {
+							levels: levels.map((level, index) => ({
+								level: index + 1,
+								items: level
+							})),
+							policy: plan.policy ? {
+								maxWorkers: plan.policy.maxWorkers,
+								retryConfigs: Object.keys(plan.policy.retries).length
+							} : undefined
+						}
+					};
+					console.log(canonicalJSONStringify(output));
+				} else {
+					console.log("Dry run - Plan validation successful");
+					console.log(`Plan contains ${plan.items.length} items in ${levels.length} levels:`);
+					levels.forEach((level: string[], index: number) => {
+						console.log(`  Level ${index + 1}: [${level.join(', ')}]`);
+					});
 
-				if (plan.policy) {
-					console.log(`Policy: ${plan.policy.maxWorkers} max workers, ${Object.keys(plan.policy.retries).length} retry configs`);
+					if (plan.policy) {
+						console.log(`Policy: ${plan.policy.maxWorkers} max workers, ${Object.keys(plan.policy.retries).length} retry configs`);
+					}
 				}
 
 				process.exit(0);
 			}
 
-			console.log(`Executing plan: ${plan.items.length} items, ${levels.length} levels`);
+			if (!opts.json) {
+				console.log(`Executing plan: ${plan.items.length} items, ${levels.length} levels`);
+			}
 
 			// Execute gates with policy
 			await executeGatesWithPolicy(plan, executionState, opts.artifactDir, timeoutMs);
