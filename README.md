@@ -1,6 +1,7 @@
 # lex-pr-runner
 
-**Lex-PR Runner** — fan-out PRs, compute a merge pyramid, run local gates, and **weave** merges cleanly.
+**Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.**
+
 - CLI: `lex-pr plan|run|merge|doctor|format|ci-replay`
 - MCP server: exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`.
 
