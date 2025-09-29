@@ -12,6 +12,7 @@ import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import * as fs from "fs";
 import * as path from "path";
+import { execSync } from "child_process";
 
 /**
  * CLI exit discipline with proper error codes
@@ -372,23 +373,165 @@ program
 	.command("doctor")
 	.description("Environment and config sanity checks")
 	.action(async () => {
-		console.log("doctor: TODO — check git, node, package manager, and .smartergpt/*");
-		console.log("✓ Node.js:", process.version);
+		let hasErrors = false;
+
+		console.log("🏥 lex-pr doctor - Environment and toolchain verification\n");
+
+		// Check basic environment
+		console.log("Environment:");
 		console.log("✓ Platform:", process.platform);
 		console.log("✓ CWD:", process.cwd());
 
-		// Check for plan.json
-		const planExists = fs.existsSync("plan.json");
-		console.log(planExists ? "✓ plan.json found" : "✗ plan.json not found");
+		// Toolchain alignment checks (critical for lockfile stability)
+		console.log("\nToolchain Alignment:");
 
+		try {
+			// Load package.json to get required versions
+			const packageJsonPath = path.join(process.cwd(), "package.json");
+			if (!fs.existsSync(packageJsonPath)) {
+				console.log("✗ package.json not found");
+				hasErrors = true;
+			} else {
+				const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+				const requiredNodeVersion = packageJson.engines?.node;
+				const requiredNpmVersion = packageJson.engines?.npm;
+				const packageManager = packageJson.packageManager;
+
+				// Check Node.js version
+				const currentNodeVersion = process.version; // e.g., "v20.19.5"
+				const nodeVersionWithoutV = currentNodeVersion.startsWith('v') ? currentNodeVersion.slice(1) : currentNodeVersion;
+				
+				if (requiredNodeVersion && requiredNodeVersion !== nodeVersionWithoutV) {
+					console.log(`✗ Node.js version mismatch: required ${requiredNodeVersion}, got ${nodeVersionWithoutV}`);
+					hasErrors = true;
+				} else if (requiredNodeVersion) {
+					console.log(`✓ Node.js: ${nodeVersionWithoutV} (matches required ${requiredNodeVersion})`);
+				} else {
+					console.log(`⚠ Node.js: ${nodeVersionWithoutV} (no engine requirement specified)`);
+				}
+
+				// Check npm version
+				try {
+					const npmVersionOutput = execSync("npm --version", { encoding: "utf-8" }).trim();
+					if (requiredNpmVersion && requiredNpmVersion !== npmVersionOutput) {
+						console.log(`✗ npm version mismatch: required ${requiredNpmVersion}, got ${npmVersionOutput}`);
+						hasErrors = true;
+					} else if (requiredNpmVersion) {
+						console.log(`✓ npm: ${npmVersionOutput} (matches required ${requiredNpmVersion})`);
+					} else {
+						console.log(`⚠ npm: ${npmVersionOutput} (no engine requirement specified)`);
+					}
+				} catch (error) {
+					console.log("✗ npm version check failed:", error instanceof Error ? error.message : String(error));
+					hasErrors = true;
+				}
+
+				// Check package manager consistency
+				if (packageManager) {
+					const expectedNpmVersion = packageManager.replace('npm@', '');
+					try {
+						const actualNpmVersion = execSync("npm --version", { encoding: "utf-8" }).trim();
+						if (expectedNpmVersion !== actualNpmVersion) {
+							console.log(`✗ packageManager mismatch: expected npm@${expectedNpmVersion}, got npm@${actualNpmVersion}`);
+							hasErrors = true;
+						} else {
+							console.log(`✓ packageManager: npm@${actualNpmVersion} (matches ${packageManager})`);
+						}
+					} catch (error) {
+						console.log("✗ packageManager verification failed:", error instanceof Error ? error.message : String(error));
+						hasErrors = true;
+					}
+				}
+
+				// Check .nvmrc consistency
+				const nvmrcPath = path.join(process.cwd(), ".nvmrc");
+				if (fs.existsSync(nvmrcPath)) {
+					const nvmrcVersion = fs.readFileSync(nvmrcPath, "utf-8").trim();
+					if (requiredNodeVersion && nvmrcVersion !== requiredNodeVersion) {
+						console.log(`✗ .nvmrc mismatch: .nvmrc has ${nvmrcVersion}, package.json engines.node has ${requiredNodeVersion}`);
+						hasErrors = true;
+					} else if (nvmrcVersion === nodeVersionWithoutV) {
+						console.log(`✓ .nvmrc: ${nvmrcVersion} (matches current Node.js version)`);
+					} else {
+						console.log(`✗ .nvmrc version mismatch: .nvmrc has ${nvmrcVersion}, current Node.js is ${nodeVersionWithoutV}`);
+						hasErrors = true;
+					}
+				} else {
+					console.log("⚠ .nvmrc not found (recommended for version consistency)");
+				}
+			}
+		} catch (error) {
+			console.log("✗ Toolchain verification failed:", error instanceof Error ? error.message : String(error));
+			hasErrors = true;
+		}
+
+		// Check git status
+		console.log("\nGit Repository:");
+		try {
+			execSync("git status --porcelain", { stdio: "pipe" });
+			console.log("✓ Git repository detected");
+		} catch (error) {
+			console.log("✗ Not in a git repository or git not available");
+			hasErrors = true;
+		}
+
+		// Check plan.json
+		console.log("\nPlan Validation:");
+		const planExists = fs.existsSync("plan.json");
 		if (planExists) {
+			console.log("✓ plan.json found");
 			try {
 				const planContent = fs.readFileSync("plan.json", "utf-8");
 				const plan = loadPlan(planContent);
 				console.log(`✓ plan.json valid (${plan.items.length} items, schema ${plan.schemaVersion})`);
 			} catch (error) {
 				console.log("✗ plan.json validation failed:", error instanceof Error ? error.message : String(error));
+				hasErrors = true;
 			}
+		} else {
+			console.log("ℹ plan.json not found (run 'lex-pr plan' to generate)");
+		}
+
+		// Check .smartergpt configuration
+		console.log("\nWorkspace Configuration:");
+		const smartergptDir = path.join(process.cwd(), ".smartergpt");
+		if (fs.existsSync(smartergptDir)) {
+			console.log("✓ .smartergpt directory found");
+			
+			const configFiles = ["scope.yml", "gates.yml"];
+			for (const file of configFiles) {
+				const filePath = path.join(smartergptDir, file);
+				if (fs.existsSync(filePath)) {
+					console.log(`✓ .smartergpt/${file} found`);
+				} else {
+					console.log(`⚠ .smartergpt/${file} not found`);
+				}
+			}
+		} else {
+			console.log("⚠ .smartergpt directory not found");
+		}
+
+		// Check lockfile consistency (critical for deterministic builds)
+		console.log("\nLockfile Consistency:");
+		const lockfilePath = path.join(process.cwd(), "package-lock.json");
+		if (fs.existsSync(lockfilePath)) {
+			console.log("✓ package-lock.json found");
+			// TODO: Add deeper lockfile integrity checks in future iterations
+		} else {
+			console.log("⚠ package-lock.json not found (run 'npm install' to generate)");
+		}
+
+		console.log("\n" + "=".repeat(50));
+		if (hasErrors) {
+			console.log("❌ Doctor check FAILED - Fix toolchain mismatches before lockfile operations");
+			console.log("\nRecommended actions:");
+			console.log("1. Use 'nvm use' to switch to the required Node.js version");
+			console.log("2. Install matching npm version with 'npm install -g npm@<version>'");
+			console.log("3. Regenerate lockfile only after toolchain alignment");
+			process.exit(1);
+		} else {
+			console.log("✅ Doctor check PASSED - Toolchain aligned for deterministic builds");
+			process.exit(0);
 		}
 	});
 
