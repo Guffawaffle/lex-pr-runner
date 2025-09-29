@@ -145,7 +145,7 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 		const env = getMCPEnvironment();
 		
 		// Load inputs from the profile directory
-		const inputs = await loadInputs(env.LEX_PROFILE_DIR);
+		const inputs = loadInputs(env.LEX_PROFILE_DIR);
 		
 		// Generate plan
 		const plan = generatePlan(inputs);
