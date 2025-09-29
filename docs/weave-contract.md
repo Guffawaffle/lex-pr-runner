@@ -14,15 +14,17 @@
 * Existing tests must pass (hard fail).
 * No disabling tests, no relaxing lints/types to "make it green."
 * Determinism check at the end: build + format → zero diff.
+* **Rollback guard**: If determinism check fails after merges, revert the last weave commit(s) and mark PRs as `needs-manual-weave`.
 
 ## Mechanical weave rules (safe auto-fixes)
 
 * **Formatting-only conflicts** → reformat repository and re-stage.
 * **Configuration files** (package.json, pyproject.toml, Cargo.toml, pom.xml, etc.):
   * **Deterministic unions**: Sort all keys alphabetically; maintain stable trailing newline.
+  * **Key collisions**: When both change the same key, prefer the stricter/safer setting; if incomparable, keep superset + document in integration PR.
   * **Dependency versions**: prefer highest compatible in-range; regenerate dependency lockfiles with **pinned toolchain**.
   * **Build/task scripts**: Union all scripts with alphabetical sorting. If same key differs:
-    * Try safe composition if behaviors are compatible.
+    * Try safe composition as `<existing> && <new>` (alphabetical by script name); if order matters, keep both with `:pr-<number>` suffixes.
     * If truly divergent: keep both with suffixed names (`taskName:pr-<number>`) and comment noting source PRs.
 * **Generated artifacts** (schemas, API docs, type definitions, compiled assets) → re-generate from source, not hand-merged.
 * **Documentation merges**:
@@ -53,6 +55,7 @@ If mechanical rules resolve the conflict and gates pass → **Merged (mechanical
     Co-authored-by: Alice <alice@example.com>
     Co-authored-by: Bob <bob@example.com>
     ```
+* **Exception handling**: Any semantic weave exceeding bounds must be labeled `weave:exception` and approved by a maintainer before merge.
 
 If gates pass → **Merged (semantic)**.
 
@@ -67,7 +70,7 @@ Mark **Skipped: conflict** or **Skipped: tests**, label the source PRs, and post
 
 ## Reporting (integration PR body)
 
-**Integration PR Matrix**:
+**Integration PR Matrix** (required):
 ```
 | PR | Status | Details | Weave Commit |
 |----|--------|---------|-------------|
@@ -78,9 +81,12 @@ Mark **Skipped: conflict** or **Skipped: tests**, label the source PRs, and post
 | #127 | Skipped (tests) | Tests failed after weave | def5678 |
 ```
 
+Integration PR **must** include this matrix and attach plan/order/gate logs. For Skipped (tests), the weave commit is optional.
+
 **PR Labeling** (automated):
 * `weave:mechanical` - Applied mechanical rules
-* `weave:semantic` - Required semantic patch
+* `weave:semantic` - Required semantic patch  
+* `weave:exception` - Bounds exceeded, maintainer approved
 * `needs-manual-weave` - Conflicts exceed weave bounds
 * `needs-rebase` - Clean rebase will resolve
 
@@ -88,13 +94,12 @@ Mark **Skipped: conflict** or **Skipped: tests**, label the source PRs, and post
 * What rule applied ("mechanical: config file key union" or "semantic: function signature reconciliation")
 * What's needed ("rebase onto integration branch" or "resolve semantic conflict in core module")
 
-**Attachments**: plan + order + gate logs + weave commit SHAs for audit trail.
-
-## Toolchain alignment (determinism prerequisite)
+**Attachments**: plan + order + gate logs + weave commit SHAs for audit trail.## Toolchain alignment (determinism prerequisite)
 
 * **Lockfile stability**: Requires pinned toolchain versions between local and CI environments.
 * **Required specification**: Version pinning appropriate to ecosystem (package.json engines, .python-version, .ruby-version, .go-version, etc.).
 * **Verification**: Validation tooling must ensure local toolchain matches CI specification.
+* **Pre-regeneration check**: Verify tool versions match CI (doctor step) or abort; do not regenerate lockfiles under mismatched toolchains.
 * **Regeneration**: Only regenerate dependency lockfiles with verified matching toolchain.
 
 ## Risk guardrails
