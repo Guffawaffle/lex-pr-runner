@@ -85,7 +85,7 @@ Integration PR **must** include this matrix and attach plan/order/gate logs. For
 
 **PR Labeling** (automated):
 * `weave:mechanical` - Applied mechanical rules
-* `weave:semantic` - Required semantic patch  
+* `weave:semantic` - Required semantic patch
 * `weave:exception` - Bounds exceeded, maintainer approved
 * `needs-manual-weave` - Conflicts exceed weave bounds
 * `needs-rebase` - Clean rebase will resolve
