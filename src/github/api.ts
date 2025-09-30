@@ -7,6 +7,17 @@ import { Octokit } from "@octokit/rest";
 import { simpleGit } from "simple-git";
 import { stableSort } from "../util/canonicalJson.js";
 
+/**
+ * Normalize a label entry returned by octokit into a string name.
+ * Labels can be returned as plain strings or objects with a `name` property.
+ */
+export function extractLabelName(label: any): string {
+	if (!label) return '';
+	if (typeof label === 'string') return label;
+	if (typeof label.name === 'string') return label.name;
+	return '';
+}
+
 export interface GitHubPullRequest {
 	number: number;
 	title: string;
@@ -55,21 +66,13 @@ export class GitHubAPI {
 			});
 
 			// Transform to our interface and sort for deterministic output
-			// Helper to normalize label entries which may be strings or objects
-			const extractLabelName = (label: any): string => {
-				if (!label) return '';
-				if (typeof label === 'string') return label;
-				if (typeof label.name === 'string') return label.name;
-				return '';
-			};
-
 			const pullRequests: GitHubPullRequest[] = pulls.map(pull => ({
 				number: pull.number,
 				title: pull.title,
 				branch: pull.head.ref,
 				sha: pull.head.sha,
 				state: pull.state as "open" | "closed" | "merged",
-				labels: stableSort(pull.labels.map(extractLabelName)) ,
+				labels: stableSort(pull.labels.map(extractLabelName)),
 				author: pull.user?.login || 'unknown',
 				baseBranch: pull.base.ref,
 				createdAt: pull.created_at,

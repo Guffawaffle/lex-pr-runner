@@ -7,7 +7,9 @@ import * as path from 'path';
 import * as os from 'os';
 
 describe('CLI Determinism Integration Tests', () => {
-	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-determinism-test');
+	// Use a per-test-file temp directory to avoid collisions when Vitest runs tests
+	// in parallel. Using the filename ensures uniqueness across test files.
+	const testDir = path.join(os.tmpdir(), `lex-pr-runner-determinism-test-${path.basename(__filename)}`);
 	const cliPath = path.resolve(__dirname, '..', 'dist', 'cli.js');
 
 	beforeEach(() => {
