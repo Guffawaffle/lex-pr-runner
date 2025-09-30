@@ -21,6 +21,7 @@
 		"format": "echo 'Format: using editorconfig for consistent formatting'",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest",
+		"ci:debug": "bash scripts/ci-debug.sh",
 		"test:run": "vitest run"
 	},
 	"dependencies": {
