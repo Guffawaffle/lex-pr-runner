@@ -55,13 +55,21 @@ export class GitHubAPI {
 			});
 
 			// Transform to our interface and sort for deterministic output
+			// Helper to normalize label entries which may be strings or objects
+			const extractLabelName = (label: any): string => {
+				if (!label) return '';
+				if (typeof label === 'string') return label;
+				if (typeof label.name === 'string') return label.name;
+				return '';
+			};
+
 			const pullRequests: GitHubPullRequest[] = pulls.map(pull => ({
 				number: pull.number,
 				title: pull.title,
 				branch: pull.head.ref,
 				sha: pull.head.sha,
 				state: pull.state as "open" | "closed" | "merged",
-				labels: stableSort(pull.labels.map(label => typeof label === 'string' ? label : label.name || '')),
+				labels: stableSort(pull.labels.map(extractLabelName)) ,
 				author: pull.user?.login || 'unknown',
 				baseBranch: pull.base.ref,
 				createdAt: pull.created_at,
@@ -146,7 +154,7 @@ async function detectGitHubRepository(): Promise<{ owner: string; repo: string }
 	try {
 		const git = simpleGit();
 		const remotes = await git.getRemotes(true);
-		
+
 		// Look for origin remote first, then any GitHub remote
 		const githubRemote = remotes.find(remote => remote.name === "origin" && remote.refs.fetch.includes("github.com"))
 			|| remotes.find(remote => remote.refs.fetch.includes("github.com"));
@@ -158,7 +166,7 @@ async function detectGitHubRepository(): Promise<{ owner: string; repo: string }
 		// Parse GitHub URL (supports both HTTPS and SSH formats)
 		const url = githubRemote.refs.fetch;
 		const match = url.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
-		
+
 		if (!match) {
 			return null;
 		}

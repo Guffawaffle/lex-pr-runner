@@ -10,7 +10,7 @@ import { generatePlan, generateEmptyPlan } from "./core/plan.js";
 import { generateSnapshot, generatePlanSummary } from "./core/snapshot.js";
 import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
-import { createGitHubAPI, GitHubAPIError } from "./github/api.js";
+import { createGitHubAPI, GitHubAPI, GitHubAPIError } from "./github/api.js";
 import { createGitOperations, GitOperationError } from "./git/operations.js";
 import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
 import * as fs from "fs";
@@ -374,7 +374,7 @@ program
 	.action((dir: string, opts) => {
 		try {
 			const report = readGateDir(dir);
-			
+
 			if (opts.out === 'md') {
 				const markdown = generateMarkdownSummary(report);
 				console.log(markdown);
@@ -384,7 +384,7 @@ program
 				console.error(`Invalid output format: ${opts.out}. Use 'json' or 'md'.`);
 				process.exit(1);
 			}
-			
+
 			// Exit with error code if not all green
 			process.exit(report.allGreen ? 0 : 1);
 		} catch (error) {
@@ -405,7 +405,7 @@ program
 	.action(async (opts) => {
 		try {
 			let githubAPI = await createGitHubAPI();
-			
+
 			// Override with command line options if provided
 			if (opts.owner && opts.repo) {
 				githubAPI = new GitHubAPI({
@@ -643,7 +643,7 @@ program
 			const nvmrcContent = fs.readFileSync(".nvmrc", "utf-8").trim();
 			const currentVersion = process.version.slice(1); // Remove 'v' prefix
 			const expectedVersion = nvmrcContent;
-			
+
 			if (currentVersion === expectedVersion) {
 				console.log(`✓ Node.js version: ${process.version} (matches .nvmrc)`);
 			} else {
@@ -662,11 +662,11 @@ program
 		try {
 			const packageJson = JSON.parse(fs.readFileSync("package.json", "utf-8"));
 			const expectedNpmVersion = packageJson.packageManager?.replace("npm@", "");
-			
+
 			if (expectedNpmVersion) {
 				const { spawn } = await import("child_process");
 				const npmVersionProcess = spawn("npm", ["--version"], { stdio: "pipe" });
-				
+
 				let npmVersion = "";
 				npmVersionProcess.stdout.on("data", (data) => {
 					npmVersion += data.toString().trim();
@@ -695,7 +695,7 @@ program
 		// Check git configuration
 		try {
 			const { spawn } = await import("child_process");
-			
+
 			// Check git user.name
 			const gitNameProcess = spawn("git", ["config", "user.name"], { stdio: "pipe" });
 			let gitName = "";
@@ -755,7 +755,7 @@ program
 		if (fs.existsSync(smartergptDir)) {
 			const expectedFiles = ["intent.md", "scope.yml", "deps.yml", "gates.yml"];
 			const missingFiles = expectedFiles.filter(file => !fs.existsSync(path.join(smartergptDir, file)));
-			
+
 			if (missingFiles.length === 0) {
 				console.log(`✓ .smartergpt: all expected files present`);
 			} else {
@@ -781,7 +781,7 @@ program
 			bootstrap.missingFiles.forEach(file => {
 				console.log(`  - ${file}`);
 			});
-			
+
 			if (opts.bootstrap) {
 				console.log("");
 				console.log("🔧 Creating minimal workspace configuration...");
@@ -824,7 +824,7 @@ program
 			const gitOps = createGitOperations();
 			const isClean = await gitOps.isClean();
 			const currentBranch = await gitOps.getCurrentBranch();
-			
+
 			console.log(`✓ Git: working directory ${isClean ? 'clean' : 'has changes'}`);
 			console.log(`✓ Git: current branch '${currentBranch}'`);
 		} catch (error) {
@@ -838,7 +838,7 @@ program
 			process.exit(1);
 		} else {
 			console.log("✅ All checks passed - environment looks good!");
-			
+
 			if (!bootstrap.hasConfiguration) {
 				console.log("");
 				console.log("Next steps:");
@@ -846,7 +846,7 @@ program
 				console.log("2. Customize .smartergpt/ files for your project");
 				console.log("3. Run 'lex-pr discover' to find open PRs");
 			}
-			
+
 			process.exit(0);
 		}
 	});
@@ -863,7 +863,7 @@ async function performDoctorChecks(): Promise<any> {
 		const nvmrcContent = fs.readFileSync(".nvmrc", "utf-8").trim();
 		const currentVersion = process.version.slice(1);
 		const expectedVersion = nvmrcContent;
-		
+
 		if (currentVersion === expectedVersion) {
 			checks.nodejs = { status: "ok", current: process.version, expected: `v${expectedVersion}` };
 		} else {
@@ -912,16 +912,16 @@ async function performDoctorChecks(): Promise<any> {
 		const gitOps = createGitOperations();
 		const isClean = await gitOps.isClean();
 		const currentBranch = await gitOps.getCurrentBranch();
-		
+
 		checks.git = {
 			status: "ok",
 			isClean,
 			currentBranch,
 		};
 	} catch (error) {
-		checks.git = { 
-			status: "error", 
-			error: error instanceof Error ? error.message : String(error) 
+		checks.git = {
+			status: "error",
+			error: error instanceof Error ? error.message : String(error)
 		};
 		checks.hasErrors = true;
 		checks.issues.push(`Git operations failed: ${error instanceof Error ? error.message : String(error)}`);
