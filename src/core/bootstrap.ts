@@ -6,6 +6,23 @@
 import * as fs from "fs";
 import * as path from "path";
 import YAML from "yaml";
+import { exec } from 'child_process';
+
+// Cached Docker availability probe. null = unknown, true = available, false = not available
+let dockerAvailable: boolean | null = null;
+
+// Probe Docker availability asynchronously at module load time and cache the result.
+// We use a short timeout to avoid hanging in environments where Docker is installed but
+// inaccessible. This keeps `getEnvironmentSuggestions()` non-blocking.
+(function probeDockerAvailability() {
+	try {
+		exec('docker --version', { timeout: 2000 }, (err) => {
+			dockerAvailable = err ? false : true;
+		});
+	} catch {
+		dockerAvailable = false;
+	}
+})();
 
 export interface BootstrapConfig {
 	profileDir: string;
@@ -26,7 +43,7 @@ export interface WorkspaceTemplate {
 export function bootstrapWorkspace(baseDir: string = "."): BootstrapConfig {
 	const profileDir = path.join(baseDir, ".smartergpt");
 	const expectedFiles = ["intent.md", "scope.yml", "deps.yml", "gates.yml"];
-	
+
 	const missingFiles: string[] = [];
 	const suggestions: string[] = [];
 
@@ -48,15 +65,15 @@ export function bootstrapWorkspace(baseDir: string = "."): BootstrapConfig {
 	if (missingFiles.includes("intent.md")) {
 		suggestions.push("Create intent.md to describe project goals and scope");
 	}
-	
+
 	if (missingFiles.includes("scope.yml")) {
 		suggestions.push("Create scope.yml to define PR discovery rules");
 	}
-	
+
 	if (missingFiles.includes("deps.yml")) {
 		suggestions.push("Create deps.yml to specify dependency relationships");
 	}
-	
+
 	if (missingFiles.includes("gates.yml")) {
 		suggestions.push("Create gates.yml to define quality gates");
 	}
@@ -74,7 +91,7 @@ export function bootstrapWorkspace(baseDir: string = "."): BootstrapConfig {
  */
 export function createMinimalWorkspace(baseDir: string = "."): void {
 	const profileDir = path.join(baseDir, ".smartergpt");
-	
+
 	// Ensure directory exists
 	fs.mkdirSync(profileDir, { recursive: true });
 
@@ -133,7 +150,7 @@ sources:
   - query: "is:pr is:open"
 selectors:
   include_labels: []
-  exclude_labels: 
+  exclude_labels:
     - "do-not-merge"
     - "work-in-progress"
 defaults:
@@ -187,24 +204,24 @@ export function detectProjectType(baseDir: string = "."): string {
 	if (fs.existsSync(path.join(baseDir, "package.json"))) {
 		return "nodejs";
 	}
-	
+
 	// Check for Python project
-	if (fs.existsSync(path.join(baseDir, "pyproject.toml")) || 
+	if (fs.existsSync(path.join(baseDir, "pyproject.toml")) ||
 		fs.existsSync(path.join(baseDir, "requirements.txt")) ||
 		fs.existsSync(path.join(baseDir, "setup.py"))) {
 		return "python";
 	}
-	
+
 	// Check for Rust project
 	if (fs.existsSync(path.join(baseDir, "Cargo.toml"))) {
 		return "rust";
 	}
-	
+
 	// Check for Go project
 	if (fs.existsSync(path.join(baseDir, "go.mod"))) {
 		return "go";
 	}
-	
+
 	return "generic";
 }
 
@@ -213,24 +230,23 @@ export function detectProjectType(baseDir: string = "."): string {
  */
 export function getEnvironmentSuggestions(): string[] {
 	const suggestions: string[] = [];
-	
+
 	// Check for CI environment
 	if (process.env.CI) {
 		suggestions.push("Running in CI environment - consider CI-specific gate configurations");
 	}
-	
+
 	// Check for GitHub Actions
 	if (process.env.GITHUB_ACTIONS) {
 		suggestions.push("GitHub Actions detected - can use 'ci-service' runtime for gates");
 	}
-	
-	// Check for Docker
-	try {
-		const { execSync } = require('child_process');
-		execSync('docker --version', { stdio: 'ignore' });
+
+	// Docker availability is checked asynchronously on module load and cached in
+	// `dockerAvailable`. If the value is true, emit a suggestion. If it's false
+	// or unknown (null) we don't block the event loop by running a sync check
+	// here. The async check is started once when the module is imported.
+	if (dockerAvailable === true) {
 		suggestions.push("Docker available - can use 'container' runtime for isolated gate execution");
-	} catch {
-		// Docker not available, no suggestion needed
 	}
 
 	return suggestions;
