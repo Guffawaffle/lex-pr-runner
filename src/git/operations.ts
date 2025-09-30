@@ -95,8 +95,10 @@ export class GitOperations {
 
 			// Check if branch exists
 			const branches = await this.git.branch(['-a']);
-			const branchExists = branches.all.some(branch => 
-				branch.includes(branchName) || branch.includes(`origin/${branchName}`)
+			const branchExists = branches.all.some(branch =>
+				branch === branchName ||
+				branch === `origin/${branchName}` ||
+				branch === `remotes/origin/${branchName}`
 			);
 
 			if (!branchExists) {
