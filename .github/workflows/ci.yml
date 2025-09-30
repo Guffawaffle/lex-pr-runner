@@ -47,6 +47,8 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
+      - name: Build
+        run: npm run build --if-present
       - run: npm test
 
   build:

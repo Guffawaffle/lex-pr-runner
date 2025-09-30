@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import { generatePlan } from '../src/core/plan';
 import { loadInputs } from '../src/core/inputs';
 import { execSync } from 'child_process';
@@ -56,7 +57,8 @@ items:
 		}).toThrow(/Unknown dependency 'nonexistent-item' for item 'broken-item'/);
 	});
 
-	it('should exit with code 2 via CLI for unknown dependencies', () => {
+	it('should exit with code 2 via CLI for unknown dependencies', (ctx) => {
+		if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 		// Create .smartergpt directory structure
 		fs.mkdirSync('.smartergpt', { recursive: true });
 

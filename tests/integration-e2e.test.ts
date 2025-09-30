@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -11,9 +12,10 @@ describe('End-to-End Integration Tests', () => {
   let tempDir: string;
   let projectDir: string;
 
-  beforeEach(() => {
+  beforeEach((context) => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-test-'));
     projectDir = path.dirname(__dirname); // Root of the project
+    if (skipIfCliNotBuilt({ skip: context.skip })) return;
   });
 
   afterEach(() => {

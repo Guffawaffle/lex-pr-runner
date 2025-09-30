@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import { canonicalJSONStringify } from '../src/util/canonicalJson';
 import { sha256, sha256FileRaw } from '../src/util/hash';
 import * as fs from 'fs';
@@ -28,7 +29,8 @@ describe('bulletproof determinism', () => {
 		}
 	});
 
-	it('plan --out should produce identical artifacts on repeated runs', () => {
+	it('plan --out should produce identical artifacts on repeated runs', (ctx) => {
+		if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 		// Create minimal config
 		fs.mkdirSync('.smartergpt', { recursive: true });
 		fs.writeFileSync('.smartergpt/stack.yml', `
@@ -75,7 +77,8 @@ items:
 		expect(sha256(snapshot1)).toBe(sha256(snapshot2));
 	});
 
-	it('plan --json should produce identical stdout on repeated runs', () => {
+	it('plan --json should produce identical stdout on repeated runs', (ctx) => {
+		if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 		// Create minimal config
 		fs.mkdirSync('.smartergpt', { recursive: true });
 		fs.writeFileSync('.smartergpt/stack.yml', `

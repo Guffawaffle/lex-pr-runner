@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import { loadInputs } from '../src/core/inputs.js';
 import { generatePlan } from '../src/core/plan.js';
 import { executeGatesWithPolicy } from '../src/gates.js';
@@ -16,7 +17,7 @@ describe('E2E Determinism Harness', () => {
 	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-e2e-determinism');
 	const repoRoot = path.resolve(__dirname, '..');
 
-	beforeEach(() => {
+	beforeEach((context) => {
 		// Clean test directory
 		if (fs.existsSync(testDir)) {
 			fs.rmSync(testDir, { recursive: true });
@@ -24,12 +25,7 @@ describe('E2E Determinism Harness', () => {
 		fs.mkdirSync(testDir, { recursive: true });
 		process.chdir(testDir);
 
-		// Build CLI for testing
-		// Use pre-built CLI to avoid rebuild loop
-		if (!fs.existsSync(path.join(repoRoot, 'dist/cli.js'))) {
-			console.log('CLI not built, skipping test');
-			return;
-		}
+		if (skipIfCliNotBuilt({ skip: context.skip })) return;
 	});
 
 	afterEach(() => {

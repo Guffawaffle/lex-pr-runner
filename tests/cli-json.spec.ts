@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import { execSync } from 'child_process';
 import { canonicalJSONStringify } from '../src/util/canonicalJson';
 import * as fs from 'fs';
@@ -9,7 +10,7 @@ describe('CLI JSON Output Tests', () => {
 	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-cli-json-test');
 	const cliPath = path.resolve(__dirname, '..', 'dist', 'cli.js');
 
-	beforeEach(() => {
+	beforeEach((context) => {
 		// Clean test directory
 		if (fs.existsSync(testDir)) {
 			fs.rmSync(testDir, { recursive: true });
@@ -17,15 +18,8 @@ describe('CLI JSON Output Tests', () => {
 		fs.mkdirSync(testDir, { recursive: true });
 		process.chdir(testDir);
 
-		// Build CLI if not exists
-		const repoRoot = path.resolve(__dirname, '..');
-		if (!fs.existsSync(cliPath)) {
-			// Use pre-built CLI to avoid rebuild loop
-			if (!fs.existsSync(path.join(repoRoot, 'dist/cli.js'))) {
-				console.log('CLI not built, skipping test');
-				return;
-			}
-		}
+		// Gate tests on CLI build
+		if (skipIfCliNotBuilt({ skip: context.skip })) return;
 	});
 
 	afterEach(() => {
@@ -37,7 +31,8 @@ describe('CLI JSON Output Tests', () => {
 	});
 
 	describe('schema validate --json', () => {
-		it('should output valid JSON for valid plan file', () => {
+		it('should output valid JSON for valid plan file', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create valid plan.json
 			const validPlan = {
 				schemaVersion: '1.0.0',
@@ -59,7 +54,8 @@ describe('CLI JSON Output Tests', () => {
 			expect(result).toHaveProperty('valid', true);
 		});
 
-		it('should output valid JSON for invalid plan file', () => {
+		it('should output valid JSON for invalid plan file', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create invalid plan.json (missing required fields)
 			fs.writeFileSync('plan.json', '{"invalid": "plan"}');
 
@@ -81,7 +77,8 @@ describe('CLI JSON Output Tests', () => {
 			expect(Array.isArray(result.errors)).toBe(true);
 		});
 
-		it('should have deterministic key ordering in error output', () => {
+		it('should have deterministic key ordering in error output', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.writeFileSync('plan.json', '{"invalid": "plan"}');
 
 			let output1: string, output2: string;
@@ -108,7 +105,8 @@ describe('CLI JSON Output Tests', () => {
 	});
 
 	describe('plan --json', () => {
-		it('should output deterministic JSON plan', () => {
+		it('should output deterministic JSON plan', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create minimal config
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
@@ -133,7 +131,8 @@ items:
 			expect(Array.isArray(plan.items)).toBe(true);
 		});
 
-		it('should handle empty configuration gracefully', () => {
+		it('should handle empty configuration gracefully', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// No config files - should generate empty plan
 			const output = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
 
@@ -143,7 +142,8 @@ items:
 			expect(plan.items).toHaveLength(0);
 		});
 
-		it('should use canonical JSON formatting with sorted keys', () => {
+		it('should use canonical JSON formatting with sorted keys', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
 version: 1
@@ -180,7 +180,8 @@ items:
 			fs.writeFileSync('plan.json', canonicalJSONStringify(plan));
 		});
 
-		it('should output deterministic merge order JSON', () => {
+		it('should output deterministic merge order JSON', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			const output1 = execSync(`node ${cliPath} merge-order plan.json --json`, { encoding: 'utf8' });
 			const output2 = execSync(`node ${cliPath} merge-order plan.json --json`, { encoding: 'utf8' });
 
@@ -191,7 +192,8 @@ items:
 			expect(Array.isArray(result.levels)).toBe(true);
 		});
 
-		it('should have stable ordering in levels', () => {
+		it('should have stable ordering in levels', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			const output = execSync(`node ${cliPath} merge-order plan.json --json`, { encoding: 'utf8' });
 
 			const result = JSON.parse(output);
@@ -214,7 +216,8 @@ items:
 			fs.writeFileSync('plan.json', canonicalJSONStringify(plan));
 		});
 
-		it('should output deterministic status JSON', () => {
+		it('should output deterministic status JSON', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			const output1 = execSync(`node ${cliPath} status plan.json --json`, { encoding: 'utf8' });
 			const output2 = execSync(`node ${cliPath} status plan.json --json`, { encoding: 'utf8' });
 
@@ -225,7 +228,8 @@ items:
 			expect(result).toHaveProperty('mergeSummary');
 		});
 
-		it('should use canonical JSON with sorted keys', () => {
+		it('should use canonical JSON with sorted keys', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			const output = execSync(`node ${cliPath} status plan.json --json`, { encoding: 'utf8' });
 
 			// Verify canonical formatting
@@ -247,7 +251,8 @@ items:
 			fs.writeFileSync('plan.json', canonicalJSONStringify(plan));
 		});
 
-		it('should output deterministic execution results in dry-run mode', () => {
+		it('should output deterministic execution results in dry-run mode', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			const output1 = execSync(`node ${cliPath} execute plan.json --dry-run --json`, { encoding: 'utf8' });
 			const output2 = execSync(`node ${cliPath} execute plan.json --dry-run --json`, { encoding: 'utf8' });
 
@@ -260,7 +265,8 @@ items:
 			expect(result.execution).toHaveProperty('levels');
 		});
 
-		it('should handle errors gracefully without crashing', () => {
+		it('should handle errors gracefully without crashing', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create plan file that will fail during loading
 			fs.writeFileSync('malformed.json', 'not valid json at all');
 
@@ -278,7 +284,8 @@ items:
 	});
 
 	describe('Exit codes and error handling', () => {
-		it('should use correct exit codes for different error types', () => {
+		it('should use correct exit codes for different error types', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Schema validation error (exit 2)
 			fs.writeFileSync('invalid.json', '{"invalid": true}');
 
@@ -290,7 +297,8 @@ items:
 			}
 		});
 
-		it('should handle missing files gracefully with JSON output', () => {
+		it('should handle missing files gracefully with JSON output', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			try {
 				execSync(`node ${cliPath} schema validate nonexistent.json --json`, {
 					encoding: 'utf8',
