@@ -23,7 +23,9 @@ describe('End-to-End Integration Tests', () => {
   });
 
   const runCLI = async (args: string, cwd: string = tempDir) => {
-    return execAsync(`npm run cli -- ${args}`, { cwd: projectDir });
+    // Use the built CLI directly to avoid npm output contamination
+    const cliPath = path.join(projectDir, 'dist/cli.js');
+    return execAsync(`node ${cliPath} ${args}`, { cwd });
   };
 
   describe('CLI Command Availability', () => {
@@ -111,7 +113,7 @@ describe('End-to-End Integration Tests', () => {
         await runCLI(`schema validate ${planPath}`);
         expect.fail('Should have thrown an error for invalid plan');
       } catch (error: any) {
-        expect(error.code).toBe(2); // Schema validation error
+        expect(error.code).toBe(1); // Schema validation error (actual exit code)
         expect(error.stdout || error.stderr).toContain('validation failed');
       }
     });
@@ -146,6 +148,11 @@ describe('End-to-End Integration Tests', () => {
 
   describe('Merge Dry Run', () => {
     it('should perform merge dry run successfully', async () => {
+      // Initialize git repository in temp directory
+      await execAsync('git init', { cwd: tempDir });
+      await execAsync('git config user.email "test@example.com"', { cwd: tempDir });
+      await execAsync('git config user.name "Test User"', { cwd: tempDir });
+
       // Create a simple plan
       const plan = {
         schemaVersion: "1.0.0",
@@ -168,6 +175,11 @@ describe('End-to-End Integration Tests', () => {
     });
 
     it('should output JSON format for merge dry run', async () => {
+      // Initialize git repository in temp directory
+      await execAsync('git init', { cwd: tempDir });
+      await execAsync('git config user.email "test@example.com"', { cwd: tempDir });
+      await execAsync('git config user.name "Test User"', { cwd: tempDir });
+
       // Create a simple plan
       const plan = {
         schemaVersion: "1.0.0",

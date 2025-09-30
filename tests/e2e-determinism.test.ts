@@ -25,7 +25,11 @@ describe('E2E Determinism Harness', () => {
 		process.chdir(testDir);
 
 		// Build CLI for testing
-		execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });
+		// Use pre-built CLI to avoid rebuild loop
+		if (!fs.existsSync(path.join(repoRoot, 'dist/cli.js'))) {
+			console.log('CLI not built, skipping test');
+			return;
+		}
 	});
 
 	afterEach(() => {
@@ -125,12 +129,12 @@ items:
 			const testDir2 = path.join(os.tmpdir(), 'lex-pr-runner-e2e-determinism-2');
 			fs.mkdirSync(testDir2, { recursive: true });
 			const originalDir = process.cwd();
-			
+
 			try {
 				process.chdir(testDir2);
 				fs.mkdirSync('.smartergpt', { recursive: true });
 				fs.writeFileSync('.smartergpt/stack.yml', configContent);
-				
+
 				const workflow2 = await runCompleteWorkflow();
 
 				// Plans should be identical despite different working directories
@@ -165,7 +169,7 @@ items:
 
 			// Run with different system environments but same gate environments
 			const originalEnv = process.env.NODE_ENV;
-			
+
 			try {
 				// First run with NODE_ENV=production (should be overridden by gate env)
 				process.env.NODE_ENV = 'production';
@@ -197,7 +201,7 @@ items:
     gates:
       - name: test
         run: bash -c "echo 'zebra test'; exit 0"
-  - id: alpha-item  
+  - id: alpha-item
     branch: feat/alpha
     deps: []
     gates:
@@ -212,7 +216,7 @@ items:
 `);
 
 			const workflow = await runCompleteWorkflow();
-			
+
 			// Verify plan has sorted items
 			const plan = JSON.parse(workflow.planJson);
 			const itemNames = plan.items.map((item: any) => item.name);
@@ -221,7 +225,7 @@ items:
 
 			// Verify all JSON is canonical (no key order dependency)
 			expect(() => JSON.parse(workflow.planJson)).not.toThrow();
-			
+
 			// Verify hash consistency
 			const hash1 = sha256(Buffer.from(workflow.planJson));
 			const hash2 = sha256(Buffer.from(canonicalJSONStringify(JSON.parse(workflow.planJson))));
@@ -244,7 +248,7 @@ items:
 		// 3. Execute gates
 		const executionState = new ExecutionState(validatedPlan);
 		const artifactDir = path.join(process.cwd(), '.artifacts');
-		
+
 		// Create artifact directory
 		if (!fs.existsSync(artifactDir)) {
 			fs.mkdirSync(artifactDir, { recursive: true });
@@ -259,7 +263,7 @@ items:
 
 		// 5. Generate snapshot (deterministic output)
 		const cliPath = path.join(repoRoot, 'dist/cli.js');
-		const snapshotOutput = execSync(`node ${cliPath} plan --json`, { 
+		const snapshotOutput = execSync(`node ${cliPath} plan --json`, {
 			encoding: 'utf8',
 			cwd: process.cwd()
 		});

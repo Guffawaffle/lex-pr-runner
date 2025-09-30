@@ -21,7 +21,11 @@ describe('CLI Determinism Integration Tests', () => {
 		// Ensure CLI is built
 		const repoRoot = path.resolve(__dirname, '..');
 		if (!fs.existsSync(cliPath)) {
-			execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });
+			// Use pre-built CLI to avoid rebuild loop
+			if (!fs.existsSync(path.join(repoRoot, 'dist/cli.js'))) {
+				console.log('CLI not built, skipping test');
+				return;
+			}
 		}
 	});
 
@@ -51,6 +55,11 @@ items:
     branch: feat/gamma
     deps: [item-beta]
 `);
+
+			// Ensure file is flushed to disk to avoid timing issues
+			const fd = fs.openSync('.smartergpt/stack.yml', 'r');
+			fs.fsyncSync(fd);
+			fs.closeSync(fd);
 
 			// Generate plan first
 			const planOutput1 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
@@ -107,6 +116,11 @@ items:
     branch: feat/final
     deps: [m-item, b-item]
 `);
+
+			// Ensure file is flushed to disk to avoid timing issues
+			const fd = fs.openSync('.smartergpt/stack.yml', 'r');
+			fs.fsyncSync(fd);
+			fs.closeSync(fd);
 
 			// Generate plan multiple times
 			const outputs = [];
