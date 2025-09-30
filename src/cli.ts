@@ -408,7 +408,6 @@ program
 			
 			// Override with command line options if provided
 			if (opts.owner && opts.repo) {
-				const { GitHubAPI } = await import("./github/api.js");
 				githubAPI = new GitHubAPI({
 					owner: opts.owner,
 					repo: opts.repo,
