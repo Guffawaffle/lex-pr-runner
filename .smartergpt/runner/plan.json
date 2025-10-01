@@ -1,29 +1,113 @@
 {
-  "target": "main",
   "items": [
     {
-      "id": 1,
-      "branch": "feature/auth-system",
-      "sha": "abc123def456",
-      "needs": [],
-      "strategy": "rebase-weave"
+      "deps": [],
+      "gates": [
+        {
+          "artifacts": [
+            "lint-results.txt"
+          ],
+          "env": {
+            "PR_BRANCH": "copilot/fix-f0876d3d-fb39-4fbd-858b-fa3e155adb35",
+            "PR_NUMBER": "70",
+            "PR_SHA": "94cdfe9545073f448b0036074deb5f2d884287e1"
+          },
+          "name": "lint",
+          "run": "npm run lint",
+          "runtime": "local"
+        },
+        {
+          "artifacts": [
+            "test-results.xml",
+            "coverage/"
+          ],
+          "env": {
+            "PR_BRANCH": "copilot/fix-f0876d3d-fb39-4fbd-858b-fa3e155adb35",
+            "PR_NUMBER": "70",
+            "PR_SHA": "94cdfe9545073f448b0036074deb5f2d884287e1"
+          },
+          "name": "test",
+          "run": "npm test",
+          "runtime": "local"
+        },
+        {
+          "artifacts": [
+            "typecheck-results.txt"
+          ],
+          "env": {
+            "PR_BRANCH": "copilot/fix-f0876d3d-fb39-4fbd-858b-fa3e155adb35",
+            "PR_NUMBER": "70",
+            "PR_SHA": "94cdfe9545073f448b0036074deb5f2d884287e1"
+          },
+          "name": "typecheck",
+          "run": "npm run typecheck",
+          "runtime": "local"
+        }
+      ],
+      "name": "PR-70"
     },
     {
-      "id": 2,
-      "branch": "feature/api-endpoints",
-      "needs": [
-        1
+      "deps": [],
+      "gates": [
+        {
+          "artifacts": [
+            "lint-results.txt"
+          ],
+          "env": {
+            "PR_BRANCH": "copilot/fix-42d54ddd-66dc-463e-a057-92b1497464bc",
+            "PR_NUMBER": "71",
+            "PR_SHA": "b0c3a9e91f4cecb1c34530c3fd2bbaa5eb30a01c"
+          },
+          "name": "lint",
+          "run": "npm run lint",
+          "runtime": "local"
+        },
+        {
+          "artifacts": [
+            "test-results.xml",
+            "coverage/"
+          ],
+          "env": {
+            "PR_BRANCH": "copilot/fix-42d54ddd-66dc-463e-a057-92b1497464bc",
+            "PR_NUMBER": "71",
+            "PR_SHA": "b0c3a9e91f4cecb1c34530c3fd2bbaa5eb30a01c"
+          },
+          "name": "test",
+          "run": "npm test",
+          "runtime": "local"
+        },
+        {
+          "artifacts": [
+            "typecheck-results.txt"
+          ],
+          "env": {
+            "PR_BRANCH": "copilot/fix-42d54ddd-66dc-463e-a057-92b1497464bc",
+            "PR_NUMBER": "71",
+            "PR_SHA": "b0c3a9e91f4cecb1c34530c3fd2bbaa5eb30a01c"
+          },
+          "name": "typecheck",
+          "run": "npm run typecheck",
+          "runtime": "local"
+        }
       ],
-      "strategy": "merge-weave"
-    },
-    {
-      "id": 3,
-      "branch": "feature/frontend-ui",
-      "needs": [
-        1,
-        2
-      ],
-      "strategy": "rebase-weave"
+      "name": "PR-71"
     }
-  ]
+  ],
+  "policy": {
+    "blockOn": [],
+    "maxWorkers": 2,
+    "mergeRule": {
+      "type": "strict-required"
+    },
+    "optionalGates": [],
+    "overrides": {},
+    "requiredGates": [
+      "lint",
+      "typecheck",
+      "test"
+    ],
+    "retries": {}
+  },
+  "schemaVersion": "1.0.0",
+  "target": "main"
 }

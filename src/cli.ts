@@ -15,6 +15,8 @@ import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import { createGitHubAPI, GitHubAPI, GitHubAPIError } from "./github/api.js";
 import { createGitOperations, GitOperationError } from "./git/operations.js";
 import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
+import { initLocalOverlay, hasLocalOverlay } from "./config/localOverlay.js";
+import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -28,7 +30,7 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
     console.error(err.message);
     process.exit(2);
   }
-  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError) {
+  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError || e instanceof WriteProtectionError) {
     console.error(String(err?.message ?? e));
     process.exit(2); // Validation errors
   }
@@ -95,7 +97,7 @@ program
 program
 	.command("plan")
 	.description("Generate plan from configuration sources or GitHub PRs")
-	.option("--out <dir>", "Output directory for artifacts", ".smartergpt/runner")
+	.option("--out <dir>", "Output directory for artifacts (default: <profile>/runner)")
 	.option("--json", "Output canonical plan JSON to stdout only")
 	.option("--dry-run", "Validate inputs and show what would be written")
 	.option("--from-github", "Auto-discover PRs from GitHub API")
@@ -107,6 +109,11 @@ program
 	.option("--repo <repo>", "GitHub repository name (auto-detected from git remote)")
 	.action(async (opts) => {
 		try {
+			// Resolve profile first to determine default output directory
+			const resolved = resolveProfile(undefined, process.cwd());
+			const defaultOutDir = path.join(resolved.path, "runner");
+			const outDir = opts.out || defaultOutDir;
+
 			let plan: Plan;
 			let inputs: any = null;
 
@@ -152,21 +159,30 @@ program
 
 			// Generate artifacts
 			const planJSON = canonicalJSONStringify(validatedPlan);
-			const snapshot = opts.fromGithub 
+			const snapshot = opts.fromGithub
 				? generateGitHubSnapshot(validatedPlan)
 				: generateSnapshot(validatedPlan, inputs);
 
 			if (opts.dryRun) {
 				console.log("Dry run - would generate:");
-				console.log(`📁 ${path.join(opts.out, "plan.json")} (${planJSON.length} bytes)`);
-				console.log(`📁 ${path.join(opts.out, "snapshot.md")} (${snapshot.length} bytes)`);
+				console.log(`📁 ${path.join(outDir, "plan.json")} (${planJSON.length} bytes)`);
+				console.log(`📁 ${path.join(outDir, "snapshot.md")} (${snapshot.length} bytes)`);
 				console.log("");
 				console.log(generatePlanSummary(validatedPlan));
 				process.exit(0);
 			}
 
-			// Write artifacts
-			const outDir = opts.out;
+			// Write artifacts - validate write permissions first
+
+			// Check if output directory is within a profile and validate write permissions
+			const absOutDir = path.resolve(outDir);
+			const profilePath = resolved.path;
+
+			// If output directory is inside the profile, validate write permissions
+			if (absOutDir.startsWith(profilePath)) {
+				validateWriteOperation(profilePath, resolved.manifest.role, "write plan artifacts");
+			}
+
 			fs.mkdirSync(outDir, { recursive: true });
 
 			const planPath = path.join(outDir, "plan.json");
@@ -824,8 +840,16 @@ program
 			if (opts.bootstrap) {
 				console.log("");
 				console.log("🔧 Creating minimal workspace configuration...");
-				createMinimalWorkspace();
-				console.log("✓ Minimal configuration created");
+				try {
+					createMinimalWorkspace();
+					console.log("✓ Minimal configuration created");
+				} catch (error) {
+					if (error instanceof WriteProtectionError) {
+						console.error(`❌ ${error.message}`);
+						process.exit(2);
+					}
+					throw error;
+				}
 			} else {
 				console.log("");
 				console.log("💡 Use --bootstrap to create minimal configuration");
@@ -1023,7 +1047,64 @@ program
 				}
 			}
 		} catch (error) {
+			if (error instanceof WriteProtectionError) {
+				console.error(`Error bootstrapping workspace: ${error.message}`);
+				process.exit(2); // Validation/config error
+			}
 			console.error(`Error bootstrapping workspace: ${error instanceof Error ? error.message : String(error)}`);
+			process.exit(1);
+		}
+	});
+
+program
+	.command("init-local")
+	.description("Initialize local overlay directory with auto-detected project configuration")
+	.option("--force", "Force recreation even if local overlay exists")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
+		try {
+			const result = initLocalOverlay(process.cwd(), opts.force);
+
+			if (opts.json) {
+				console.log(canonicalJSONStringify({
+					created: result.created,
+					path: result.path,
+					config: result.config,
+					copiedFiles: result.copiedFiles
+				}));
+			} else {
+				if (result.created) {
+					console.log("🎉 Local overlay initialized successfully");
+					console.log("");
+					console.log(`📁 Created: ${result.path}/`);
+					console.log(`🔧 Project type: ${result.config.projectType}`);
+					console.log(`👤 Role: ${result.config.role}`);
+					console.log("");
+
+					if (result.copiedFiles.length > 0) {
+						console.log("📋 Copied files from .smartergpt/:");
+						result.copiedFiles.forEach(file => {
+							console.log(`  • ${file}`);
+						});
+						console.log("");
+					}
+
+					console.log("Next steps:");
+					console.log("1. Edit .smartergpt.local/ files to customize for local development");
+					console.log("2. .smartergpt.local/ is gitignored and won't be committed");
+					console.log("3. Run commands normally - local overlay takes precedence");
+				} else {
+					console.log("ℹ️  Local overlay already exists");
+					console.log("");
+					console.log(`📁 Location: ${result.path}/`);
+					console.log(`🔧 Project type: ${result.config.projectType}`);
+					console.log(`👤 Role: ${result.config.role}`);
+					console.log("");
+					console.log("Use --force to recreate");
+				}
+			}
+		} catch (error) {
+			console.error(`Error initializing local overlay: ${error instanceof Error ? error.message : String(error)}`);
 			process.exit(1);
 		}
 	});

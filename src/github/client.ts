@@ -5,17 +5,20 @@
 
 import { Octokit } from "@octokit/rest";
 import { createTokenAuth } from "@octokit/auth-token";
-import {
+import type {
 	PullRequest,
 	PullRequestDetails,
 	PRQueryOptions,
-	RepositoryInfo,
+	RepositoryInfo
+} from "./types.js";
+import {
 	GitHubAPIError,
 	GitHubRateLimitError,
 	GitHubAuthError
 } from "./types.js";
 
-export { PullRequest, PullRequestDetails, PRQueryOptions, RepositoryInfo, GitHubAPIError, GitHubRateLimitError, GitHubAuthError };
+export type { PullRequest, PullRequestDetails, PRQueryOptions, RepositoryInfo };
+export { GitHubAPIError, GitHubRateLimitError, GitHubAuthError };
 
 export interface GitHubClient {
 	listOpenPRs(options?: PRQueryOptions): Promise<PullRequest[]>;
@@ -36,7 +39,7 @@ export class GitHubClientImpl implements GitHubClient {
 	}) {
 		this.owner = options.owner;
 		this.repo = options.repo;
-		
+
 		// Initialize Octokit with authentication if token provided
 		if (options.token) {
 			this.octokit = new Octokit({
@@ -108,8 +111,8 @@ export class GitHubClientImpl implements GitHubClient {
 			// Filter by labels if specified
 			let prs = response.data;
 			if (options.labels && options.labels.length > 0) {
-				prs = prs.filter(pr => 
-					options.labels!.some(label => 
+				prs = prs.filter(pr =>
+					options.labels!.some(label =>
 						pr.labels.some(prLabel => prLabel.name === label)
 					)
 				);
@@ -151,7 +154,7 @@ export class GitHubClientImpl implements GitHubClient {
 		}
 
 		const dependencies: string[] = [];
-		
+
 		// Parse "Depends-on:" footers using regex
 		// Matches patterns like:
 		// - "Depends-on: #123"
@@ -162,10 +165,10 @@ export class GitHubClientImpl implements GitHubClient {
 
 		for (const match of matches) {
 			const dependencyStr = match[1].trim();
-			
+
 			// Split by comma and process each dependency
 			const deps = dependencyStr.split(',').map(dep => dep.trim());
-			
+
 			for (const dep of deps) {
 				// Parse different dependency formats
 				if (dep.startsWith('#')) {
@@ -224,19 +227,19 @@ export class GitHubClientImpl implements GitHubClient {
 			.map(label => label.name)
 			.filter(name => name.startsWith('stack:') || name.startsWith('tag:'))
 			.map(name => name.replace(/^(stack:|tag:)/, ''));
-		
+
 		return [...new Set(tags)].sort();
 	}
 
 	private extractRequiredGates(pr: PullRequest): string[] {
 		const gates: string[] = [];
-		
+
 		// Extract from labels like "gate:lint", "gate:test"
 		const gateLabels = pr.labels
 			.map(label => label.name)
 			.filter(name => name.startsWith('gate:'))
 			.map(name => name.replace(/^gate:/, ''));
-		
+
 		gates.push(...gateLabels);
 
 		// Extract from PR body using "Required-gates:" footer
@@ -283,13 +286,13 @@ export async function createGitHubClient(options: {
 			const { execa } = await import("execa");
 			const result = await execa("git", ["remote", "get-url", "origin"]);
 			const remoteUrl = result.stdout.trim();
-			
+
 			// Parse GitHub URL formats
 			// SSH: git@github.com:owner/repo.git
 			// HTTPS: https://github.com/owner/repo.git
 			const sshMatch = remoteUrl.match(/git@github\.com:([^/]+)\/([^.]+)\.git$/);
 			const httpsMatch = remoteUrl.match(/https:\/\/github\.com\/([^/]+)\/([^.]+)\.git$/);
-			
+
 			if (sshMatch) {
 				owner = owner || sshMatch[1];
 				repo = repo || sshMatch[2];

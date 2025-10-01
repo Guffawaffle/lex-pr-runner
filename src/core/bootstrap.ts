@@ -7,6 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 import YAML from "yaml";
 import { exec } from 'child_process';
+import { resolveProfile, validateWriteOperation, WriteProtectionError } from "../config/profileResolver.js";
 
 // Cached Docker availability probe. null = unknown, true = available, false = not available
 let dockerAvailable: boolean | null = null;
@@ -39,9 +40,17 @@ export interface WorkspaceTemplate {
 
 /**
  * Bootstrap workspace configuration with intelligent defaults
+ * 
+ * @param baseDir - Base directory for profile resolution
+ * @param profileDirFlag - Optional profile directory override (from CLI --profile-dir)
  */
-export function bootstrapWorkspace(baseDir: string = "."): BootstrapConfig {
-	const profileDir = path.join(baseDir, ".smartergpt");
+export function bootstrapWorkspace(
+	baseDir: string = ".",
+	profileDirFlag?: string
+): BootstrapConfig {
+	// Resolve the profile directory
+	const resolved = resolveProfile(profileDirFlag, baseDir);
+	const profileDir = resolved.path;
 	const expectedFiles = ["intent.md", "scope.yml", "deps.yml", "gates.yml"];
 
 	const missingFiles: string[] = [];
@@ -88,9 +97,22 @@ export function bootstrapWorkspace(baseDir: string = "."): BootstrapConfig {
 
 /**
  * Create minimal workspace configuration
+ * 
+ * @param baseDir - Base directory for profile resolution
+ * @param profileDirFlag - Optional profile directory override (from CLI --profile-dir)
+ * @throws WriteProtectionError if attempting to write to a read-only profile
  */
-export function createMinimalWorkspace(baseDir: string = "."): void {
-	const profileDir = path.join(baseDir, ".smartergpt");
+export function createMinimalWorkspace(
+	baseDir: string = ".",
+	profileDirFlag?: string
+): void {
+	// Resolve the profile directory and check write permissions
+	const resolved = resolveProfile(profileDirFlag, baseDir);
+	const profileDir = resolved.path;
+	const role = resolved.manifest.role;
+	
+	// Validate write operation is allowed
+	validateWriteOperation(profileDir, role, "create minimal workspace");
 
 	// Ensure directory exists
 	fs.mkdirSync(profileDir, { recursive: true });

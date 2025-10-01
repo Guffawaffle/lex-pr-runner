@@ -12,7 +12,8 @@ describe('Profile Resolver', () => {
 	beforeEach(() => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'profile-test-'));
 		originalEnv = { ...process.env };
-		consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+		// Spy on console.error since telemetry now uses stderr
+		consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 	});
 
 	afterEach(() => {

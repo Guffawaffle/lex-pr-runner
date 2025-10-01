@@ -22,15 +22,19 @@ import { executeGatesWithPolicy } from "../gates.js";
 import { ExecutionState } from "../executionState.js";
 import { MergeEligibilityEvaluator } from "../mergeEligibility.js";
 import { loadPlan, validatePlan } from "../schema.js";
+import { initLocalOverlay } from "../config/localOverlay.js";
 import {
 	getMCPEnvironment,
 	PlanCreateArgs,
 	GatesRunArgs,
 	MergeApplyArgs,
+	InitLocalArgs,
 	PlanCreateResult,
 	GatesRunResult,
 	MergeApplyResult,
+	InitLocalResult,
 } from "./types.js";
+import { resolveProfile, validateWriteOperation, WriteProtectionError } from "../config/profileResolver.js";
 
 import * as fs from "fs";
 import * as path from "path";
@@ -108,6 +112,20 @@ function createServer(): Server {
 						},
 					},
 				},
+				{
+					name: "local.init",
+					description: "Initialize local overlay directory with auto-detected project configuration",
+					inputSchema: {
+						type: "object",
+						properties: {
+							force: {
+								type: "boolean",
+								description: "Force recreation even if local overlay exists",
+								default: false,
+							},
+						},
+					},
+				},
 			],
 		};
 	});
@@ -125,6 +143,9 @@ function createServer(): Server {
 			
 			case "merge.apply":
 				return await handleMergeApply(args as MergeApplyArgs);
+			
+			case "local.init":
+				return await handleLocalInit(args as InitLocalArgs);
 			
 			default:
 				throw new McpError(
@@ -144,14 +165,22 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 	try {
 		const env = getMCPEnvironment();
 		
+		// Resolve profile and validate write permissions
+		const resolved = resolveProfile(undefined, process.cwd());
+		const profilePath = resolved.path;
+		const role = resolved.manifest.role;
+		
 		// Load inputs from the profile directory
-		const inputs = loadInputs(env.LEX_PROFILE_DIR);
+		const inputs = loadInputs(profilePath);
 		
 		// Generate plan
 		const plan = generatePlan(inputs);
 		
 		// Determine output directory
-		const outDir = args.outDir || path.join(env.LEX_PROFILE_DIR, "runner");
+		const outDir = args.outDir || path.join(profilePath, "runner");
+		
+		// Validate write operation is allowed
+		validateWriteOperation(profilePath, role, "write plan artifacts");
 		
 		// Ensure output directory exists
 		if (!fs.existsSync(outDir)) {
@@ -183,6 +212,12 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 		};
 		
 	} catch (error) {
+		if (error instanceof WriteProtectionError) {
+			throw new McpError(
+				ErrorCode.InvalidRequest,
+				error.message
+			);
+		}
 		throw new McpError(
 			ErrorCode.InternalError,
 			`Failed to create plan: ${error instanceof Error ? error.message : String(error)}`
@@ -340,6 +375,38 @@ async function handleMergeApply(args: MergeApplyArgs): Promise<{ content: [{ typ
 		throw new McpError(
 			ErrorCode.InternalError,
 			`Failed to apply merge: ${error instanceof Error ? error.message : String(error)}`
+		);
+	}
+}
+
+/**
+ * Handle local.init tool
+ */
+async function handleLocalInit(args: InitLocalArgs): Promise<{ content: [{ type: "text", text: string }] }> {
+	try {
+		const force = args.force ?? false;
+		const result = initLocalOverlay(process.cwd(), force);
+		
+		const output: InitLocalResult = {
+			created: result.created,
+			path: result.path,
+			config: result.config,
+			copiedFiles: result.copiedFiles
+		};
+		
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify(output, null, 2)
+				}
+			]
+		};
+		
+	} catch (error) {
+		throw new McpError(
+			ErrorCode.InternalError,
+			`Failed to initialize local overlay: ${error instanceof Error ? error.message : String(error)}`
 		);
 	}
 }
