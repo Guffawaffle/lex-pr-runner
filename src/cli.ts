@@ -113,7 +113,7 @@ program
 			const resolved = resolveProfile(undefined, process.cwd());
 			const defaultOutDir = path.join(resolved.path, "runner");
 			const outDir = opts.out || defaultOutDir;
-			
+
 			let plan: Plan;
 			let inputs: any = null;
 
@@ -159,7 +159,7 @@ program
 
 			// Generate artifacts
 			const planJSON = canonicalJSONStringify(validatedPlan);
-			const snapshot = opts.fromGithub 
+			const snapshot = opts.fromGithub
 				? generateGitHubSnapshot(validatedPlan)
 				: generateSnapshot(validatedPlan, inputs);
 
@@ -173,16 +173,16 @@ program
 			}
 
 			// Write artifacts - validate write permissions first
-			
+
 			// Check if output directory is within a profile and validate write permissions
 			const absOutDir = path.resolve(outDir);
 			const profilePath = resolved.path;
-			
+
 			// If output directory is inside the profile, validate write permissions
 			if (absOutDir.startsWith(profilePath)) {
 				validateWriteOperation(profilePath, resolved.manifest.role, "write plan artifacts");
 			}
-			
+
 			fs.mkdirSync(outDir, { recursive: true });
 
 			const planPath = path.join(outDir, "plan.json");
