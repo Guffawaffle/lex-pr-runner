@@ -7,7 +7,9 @@ import { ExecutionState } from "./executionState.js";
 import { MergeEligibilityEvaluator } from "./mergeEligibility.js";
 import { loadInputs } from "./core/inputs.js";
 import { generatePlan, generateEmptyPlan } from "./core/plan.js";
-import { generateSnapshot, generatePlanSummary } from "./core/snapshot.js";
+import { generateSnapshot, generatePlanSummary, generateGitHubSnapshot } from "./core/snapshot.js";
+import { generatePlanFromGitHub } from "./core/githubPlan.js";
+import { createGitHubClient } from "./github/index.js";
 import { canonicalJSONStringify } from "./util/canonicalJson.js";
 import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import * as fs from "fs";
@@ -89,17 +91,52 @@ program
 // Plan generation command
 program
 	.command("plan")
-	.description("Generate plan from configuration sources")
+	.description("Generate plan from configuration sources or GitHub PRs")
 	.option("--out <dir>", "Output directory for artifacts", ".smartergpt/runner")
 	.option("--json", "Output canonical plan JSON to stdout only")
 	.option("--dry-run", "Validate inputs and show what would be written")
+	.option("--from-github", "Auto-discover PRs from GitHub API")
+	.option("--query <query>", "GitHub search query (e.g., 'is:open label:stack:*')")
+	.option("--labels <labels>", "Filter PRs by comma-separated labels")
+	.option("--include-drafts", "Include draft PRs in the plan")
+	.option("--github-token <token>", "GitHub API token (or use GITHUB_TOKEN env var)")
+	.option("--owner <owner>", "GitHub repository owner (auto-detected from git remote)")
+	.option("--repo <repo>", "GitHub repository name (auto-detected from git remote)")
 	.action(async (opts) => {
 		try {
-			// Load inputs with deterministic ordering
-			const inputs = loadInputs();
+			let plan: Plan;
+			let inputs: any = null;
 
-			// Generate normalized plan
-			const plan = inputs.items.length > 0 ? generatePlan(inputs) : generateEmptyPlan(inputs.target);
+			if (opts.fromGithub) {
+				// GitHub mode: auto-discover PRs
+				const client = await createGitHubClient({
+					token: opts.githubToken,
+					owner: opts.owner,
+					repo: opts.repo
+				});
+
+				// Parse labels if provided
+				const labels = opts.labels ? opts.labels.split(',').map((l: string) => l.trim()) : undefined;
+
+				// Generate plan from GitHub
+				plan = await generatePlanFromGitHub(client, {
+					query: opts.query,
+					labels,
+					includeDrafts: opts.includeDrafts,
+					policy: {
+						requiredGates: ["lint", "typecheck", "test"],
+						maxWorkers: 2
+					}
+				});
+
+				if (!opts.json) {
+					console.log(`✓ Auto-discovered ${plan.items.length} PRs from GitHub`);
+				}
+			} else {
+				// Traditional mode: load from configuration files
+				inputs = loadInputs();
+				plan = inputs.items.length > 0 ? generatePlan(inputs) : generateEmptyPlan(inputs.target);
+			}
 
 			// Validate plan structure
 			const validatedPlan = loadPlan(canonicalJSONStringify(plan));
@@ -112,7 +149,9 @@ program
 
 			// Generate artifacts
 			const planJSON = canonicalJSONStringify(validatedPlan);
-			const snapshot = generateSnapshot(validatedPlan, inputs);
+			const snapshot = opts.fromGithub 
+				? generateGitHubSnapshot(validatedPlan)
+				: generateSnapshot(validatedPlan, inputs);
 
 			if (opts.dryRun) {
 				console.log("Dry run - would generate:");

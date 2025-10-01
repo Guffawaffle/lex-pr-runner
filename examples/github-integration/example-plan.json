@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "1.0.0",
+  "target": "main",
+  "policy": {
+    "requiredGates": ["lint", "typecheck", "test"],
+    "optionalGates": [],
+    "maxWorkers": 2,
+    "retries": {},
+    "overrides": {},
+    "blockOn": [],
+    "mergeRule": {
+      "type": "strict-required"
+    }
+  },
+  "items": [
+    {
+      "name": "PR-101",
+      "deps": [],
+      "gates": [
+        {
+          "name": "lint",
+          "run": "npm run lint",
+          "env": {
+            "PR_NUMBER": "101",
+            "PR_BRANCH": "core-utils",
+            "PR_SHA": "abc123def456"
+          },
+          "runtime": "local",
+          "artifacts": ["lint-results.txt"]
+        },
+        {
+          "name": "test",
+          "run": "npm test",
+          "env": {
+            "PR_NUMBER": "101", 
+            "PR_BRANCH": "core-utils",
+            "PR_SHA": "abc123def456"
+          },
+          "runtime": "local",
+          "artifacts": ["test-results.xml", "coverage/"]
+        },
+        {
+          "name": "typecheck",
+          "run": "npm run typecheck",
+          "env": {
+            "PR_NUMBER": "101",
+            "PR_BRANCH": "core-utils", 
+            "PR_SHA": "abc123def456"
+          },
+          "runtime": "local",
+          "artifacts": ["typecheck-results.txt"]
+        }
+      ]
+    },
+    {
+      "name": "PR-202",
+      "deps": ["PR-101"],
+      "gates": [
+        {
+          "name": "lint",
+          "run": "npm run lint",
+          "env": {
+            "PR_NUMBER": "202",
+            "PR_BRANCH": "feature-auth",
+            "PR_SHA": "def456ghi789"
+          },
+          "runtime": "local",
+          "artifacts": ["lint-results.txt"]
+        },
+        {
+          "name": "test",
+          "run": "npm test", 
+          "env": {
+            "PR_NUMBER": "202",
+            "PR_BRANCH": "feature-auth",
+            "PR_SHA": "def456ghi789"
+          },
+          "runtime": "local",
+          "artifacts": ["test-results.xml", "coverage/"]
+        },
+        {
+          "name": "typecheck",
+          "run": "npm run typecheck",
+          "env": {
+            "PR_NUMBER": "202",
+            "PR_BRANCH": "feature-auth",
+            "PR_SHA": "def456ghi789"
+          },
+          "runtime": "local",
+          "artifacts": ["typecheck-results.txt"]
+        }
+      ]
+    }
+  ]
+}
