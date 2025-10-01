@@ -15,6 +15,7 @@ import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import { createGitHubAPI, GitHubAPI, GitHubAPIError } from "./github/api.js";
 import { createGitOperations, GitOperationError } from "./git/operations.js";
 import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
+import { initLocalOverlay, hasLocalOverlay } from "./config/localOverlay.js";
 import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -1051,6 +1052,59 @@ program
 				process.exit(2); // Validation/config error
 			}
 			console.error(`Error bootstrapping workspace: ${error instanceof Error ? error.message : String(error)}`);
+			process.exit(1);
+		}
+	});
+
+program
+	.command("init-local")
+	.description("Initialize local overlay directory with auto-detected project configuration")
+	.option("--force", "Force recreation even if local overlay exists")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
+		try {
+			const result = initLocalOverlay(process.cwd(), opts.force);
+
+			if (opts.json) {
+				console.log(canonicalJSONStringify({
+					created: result.created,
+					path: result.path,
+					config: result.config,
+					copiedFiles: result.copiedFiles
+				}));
+			} else {
+				if (result.created) {
+					console.log("🎉 Local overlay initialized successfully");
+					console.log("");
+					console.log(`📁 Created: ${result.path}/`);
+					console.log(`🔧 Project type: ${result.config.projectType}`);
+					console.log(`👤 Role: ${result.config.role}`);
+					console.log("");
+
+					if (result.copiedFiles.length > 0) {
+						console.log("📋 Copied files from .smartergpt/:");
+						result.copiedFiles.forEach(file => {
+							console.log(`  • ${file}`);
+						});
+						console.log("");
+					}
+
+					console.log("Next steps:");
+					console.log("1. Edit .smartergpt.local/ files to customize for local development");
+					console.log("2. .smartergpt.local/ is gitignored and won't be committed");
+					console.log("3. Run commands normally - local overlay takes precedence");
+				} else {
+					console.log("ℹ️  Local overlay already exists");
+					console.log("");
+					console.log(`📁 Location: ${result.path}/`);
+					console.log(`🔧 Project type: ${result.config.projectType}`);
+					console.log(`👤 Role: ${result.config.role}`);
+					console.log("");
+					console.log("Use --force to recreate");
+				}
+			}
+		} catch (error) {
+			console.error(`Error initializing local overlay: ${error instanceof Error ? error.message : String(error)}`);
 			process.exit(1);
 		}
 	});

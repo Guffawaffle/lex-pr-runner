@@ -22,14 +22,17 @@ import { executeGatesWithPolicy } from "../gates.js";
 import { ExecutionState } from "../executionState.js";
 import { MergeEligibilityEvaluator } from "../mergeEligibility.js";
 import { loadPlan, validatePlan } from "../schema.js";
+import { initLocalOverlay } from "../config/localOverlay.js";
 import {
 	getMCPEnvironment,
 	PlanCreateArgs,
 	GatesRunArgs,
 	MergeApplyArgs,
+	InitLocalArgs,
 	PlanCreateResult,
 	GatesRunResult,
 	MergeApplyResult,
+	InitLocalResult,
 } from "./types.js";
 import { resolveProfile, validateWriteOperation, WriteProtectionError } from "../config/profileResolver.js";
 
@@ -109,6 +112,20 @@ function createServer(): Server {
 						},
 					},
 				},
+				{
+					name: "local.init",
+					description: "Initialize local overlay directory with auto-detected project configuration",
+					inputSchema: {
+						type: "object",
+						properties: {
+							force: {
+								type: "boolean",
+								description: "Force recreation even if local overlay exists",
+								default: false,
+							},
+						},
+					},
+				},
 			],
 		};
 	});
@@ -126,6 +143,9 @@ function createServer(): Server {
 			
 			case "merge.apply":
 				return await handleMergeApply(args as MergeApplyArgs);
+			
+			case "local.init":
+				return await handleLocalInit(args as InitLocalArgs);
 			
 			default:
 				throw new McpError(
@@ -355,6 +375,38 @@ async function handleMergeApply(args: MergeApplyArgs): Promise<{ content: [{ typ
 		throw new McpError(
 			ErrorCode.InternalError,
 			`Failed to apply merge: ${error instanceof Error ? error.message : String(error)}`
+		);
+	}
+}
+
+/**
+ * Handle local.init tool
+ */
+async function handleLocalInit(args: InitLocalArgs): Promise<{ content: [{ type: "text", text: string }] }> {
+	try {
+		const force = args.force ?? false;
+		const result = initLocalOverlay(process.cwd(), force);
+		
+		const output: InitLocalResult = {
+			created: result.created,
+			path: result.path,
+			config: result.config,
+			copiedFiles: result.copiedFiles
+		};
+		
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify(output, null, 2)
+				}
+			]
+		};
+		
+	} catch (error) {
+		throw new McpError(
+			ErrorCode.InternalError,
+			`Failed to initialize local overlay: ${error instanceof Error ? error.message : String(error)}`
 		);
 	}
 }
