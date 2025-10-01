@@ -109,7 +109,8 @@ export function resolveProfile(
  * Emit telemetry breadcrumb on profile resolution
  */
 function emitTelemetry(profilePath: string, role: string): void {
-	console.log(`lex-pr-runner using profile: ${profilePath} (role: ${role})`);
+	// Use stderr to avoid interfering with JSON output to stdout
+	console.error(`lex-pr-runner using profile: ${profilePath} (role: ${role})`);
 }
 
 /**

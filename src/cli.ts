@@ -15,7 +15,7 @@ import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import { createGitHubAPI, GitHubAPI, GitHubAPIError } from "./github/api.js";
 import { createGitOperations, GitOperationError } from "./git/operations.js";
 import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
-import { WriteProtectionError } from "./config/profileResolver.js";
+import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -29,7 +29,7 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
     console.error(err.message);
     process.exit(2);
   }
-  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError) {
+  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError || e instanceof WriteProtectionError) {
     console.error(String(err?.message ?? e));
     process.exit(2); // Validation errors
   }
@@ -96,7 +96,7 @@ program
 program
 	.command("plan")
 	.description("Generate plan from configuration sources or GitHub PRs")
-	.option("--out <dir>", "Output directory for artifacts", ".smartergpt/runner")
+	.option("--out <dir>", "Output directory for artifacts (default: <profile>/runner)")
 	.option("--json", "Output canonical plan JSON to stdout only")
 	.option("--dry-run", "Validate inputs and show what would be written")
 	.option("--from-github", "Auto-discover PRs from GitHub API")
@@ -108,6 +108,11 @@ program
 	.option("--repo <repo>", "GitHub repository name (auto-detected from git remote)")
 	.action(async (opts) => {
 		try {
+			// Resolve profile first to determine default output directory
+			const resolved = resolveProfile(undefined, process.cwd());
+			const defaultOutDir = path.join(resolved.path, "runner");
+			const outDir = opts.out || defaultOutDir;
+			
 			let plan: Plan;
 			let inputs: any = null;
 
@@ -159,15 +164,24 @@ program
 
 			if (opts.dryRun) {
 				console.log("Dry run - would generate:");
-				console.log(`📁 ${path.join(opts.out, "plan.json")} (${planJSON.length} bytes)`);
-				console.log(`📁 ${path.join(opts.out, "snapshot.md")} (${snapshot.length} bytes)`);
+				console.log(`📁 ${path.join(outDir, "plan.json")} (${planJSON.length} bytes)`);
+				console.log(`📁 ${path.join(outDir, "snapshot.md")} (${snapshot.length} bytes)`);
 				console.log("");
 				console.log(generatePlanSummary(validatedPlan));
 				process.exit(0);
 			}
 
-			// Write artifacts
-			const outDir = opts.out;
+			// Write artifacts - validate write permissions first
+			
+			// Check if output directory is within a profile and validate write permissions
+			const absOutDir = path.resolve(outDir);
+			const profilePath = resolved.path;
+			
+			// If output directory is inside the profile, validate write permissions
+			if (absOutDir.startsWith(profilePath)) {
+				validateWriteOperation(profilePath, resolved.manifest.role, "write plan artifacts");
+			}
+			
 			fs.mkdirSync(outDir, { recursive: true });
 
 			const planPath = path.join(outDir, "plan.json");
