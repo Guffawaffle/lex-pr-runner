@@ -109,7 +109,8 @@ export function resolveProfile(
  * Emit telemetry breadcrumb on profile resolution
  */
 function emitTelemetry(profilePath: string, role: string): void {
-	console.log(`lex-pr-runner using profile: ${profilePath} (role: ${role})`);
+	// Use stderr to avoid interfering with JSON output to stdout
+	console.error(`lex-pr-runner using profile: ${profilePath} (role: ${role})`);
 }
 
 /**
@@ -119,5 +120,58 @@ export class ProfileResolverError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = "ProfileResolverError";
+	}
+}
+
+/**
+ * Write protection error - thrown when attempting to write to a protected profile
+ */
+export class WriteProtectionError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "WriteProtectionError";
+	}
+}
+
+/**
+ * Validate if writes are allowed to a profile path
+ * 
+ * Write discipline rules:
+ * - Profiles with role="example" are read-only (tracked example profiles)
+ * - All writes must target local overlay or explicitly writable profiles
+ * - .smartergpt/ is treated as role="example" if no manifest exists
+ * 
+ * @param profilePath - Absolute path to the profile directory
+ * @param role - Profile role from manifest (defaults to "example" for .smartergpt/)
+ * @returns true if writes are allowed, false otherwise
+ */
+export function canWriteToProfile(profilePath: string, role: string): boolean {
+	// Profiles with role "example" are read-only
+	if (role === "example") {
+		return false;
+	}
+	
+	// All other roles are writable
+	return true;
+}
+
+/**
+ * Validate write operation and throw error if not allowed
+ * 
+ * @param profilePath - Absolute path to the profile directory
+ * @param role - Profile role from manifest
+ * @param operation - Description of the operation being attempted (for error message)
+ * @throws WriteProtectionError if writes are not allowed
+ */
+export function validateWriteOperation(
+	profilePath: string,
+	role: string,
+	operation: string
+): void {
+	if (!canWriteToProfile(profilePath, role)) {
+		throw new WriteProtectionError(
+			`Cannot ${operation}: profile at "${profilePath}" has role="${role}" (read-only). ` +
+			`Use a local profile (.smartergpt.local/) or set LEX_PR_PROFILE_DIR to a writable location.`
+		);
 	}
 }
