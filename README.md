@@ -158,6 +158,17 @@ cmp .artifacts1/plan.json .artifacts2/plan.json  # Should be identical
 - Cross-platform portability (Windows, macOS, Linux)
 - Dependency resolution by `name` field with cycle detection
 
+## Note about tests and temp directories
+
+When running tests the suite may run files in parallel. Some tests temporarily change the process working directory (for example to exercise CLI behaviors) and create/remove temp directories. To avoid race conditions and `getcwd()` failures we use a per-test-file temporary directory naming pattern (based on the test filename) so parallel test files don't collide when they change `process.cwd()` or remove temporary folders. If you add new tests that change directory, follow the same pattern:
+
+```ts
+const testDir = path.join(os.tmpdir(), `lex-pr-runner-determinism-test-${path.basename(__filename)}`);
+process.chdir(testDir);
+```
+
+This keeps tests isolated and prevents intermittent failures when running the full test suite.
+
 ## Notes
 - Deterministic > clever. Outputs are sorted for stable diffs.
 - `schemas/plan.schema.json` is the source of truth for validation.

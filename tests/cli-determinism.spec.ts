@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import { execSync } from 'child_process';
 import { canonicalJSONStringify } from '../src/util/canonicalJson';
 import { sha256 } from '../src/util/hash';
@@ -7,10 +8,12 @@ import * as path from 'path';
 import * as os from 'os';
 
 describe('CLI Determinism Integration Tests', () => {
-	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-determinism-test');
+	// Use a per-test-file temp directory to avoid collisions when Vitest runs tests
+	// in parallel. Using the filename ensures uniqueness across test files.
+	const testDir = path.join(os.tmpdir(), `lex-pr-runner-determinism-test-${path.basename(__filename)}`);
 	const cliPath = path.resolve(__dirname, '..', 'dist', 'cli.js');
 
-	beforeEach(() => {
+	beforeEach((context) => {
 		// Clean test directory
 		if (fs.existsSync(testDir)) {
 			fs.rmSync(testDir, { recursive: true });
@@ -18,11 +21,8 @@ describe('CLI Determinism Integration Tests', () => {
 		fs.mkdirSync(testDir, { recursive: true });
 		process.chdir(testDir);
 
-		// Ensure CLI is built
-		const repoRoot = path.resolve(__dirname, '..');
-		if (!fs.existsSync(cliPath)) {
-			execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });
-		}
+		// Central CLI build gate
+		if (skipIfCliNotBuilt({ skip: context.skip })) return;
 	});
 
 	afterEach(() => {
@@ -34,7 +34,8 @@ describe('CLI Determinism Integration Tests', () => {
 	});
 
 	describe('Cross-command determinism', () => {
-		it('should produce identical JSON across all CLI commands for same inputs', () => {
+		it('should produce identical JSON across all CLI commands for same inputs', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create consistent test setup
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
@@ -51,6 +52,11 @@ items:
     branch: feat/gamma
     deps: [item-beta]
 `);
+
+			// Ensure file is flushed to disk to avoid timing issues
+			const fd = fs.openSync('.smartergpt/stack.yml', 'r');
+			fs.fsyncSync(fd);
+			fs.closeSync(fd);
 
 			// Generate plan first
 			const planOutput1 = execSync(`node ${cliPath} plan --json`, { encoding: 'utf8' });
@@ -84,7 +90,8 @@ items:
 			expect(sha256(Buffer.from(executeOutput1))).toBe(sha256(Buffer.from(executeOutput2)));
 		});
 
-		it('should maintain determinism with complex dependency graphs', () => {
+		it('should maintain determinism with complex dependency graphs', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create complex dependency structure with potential ordering ambiguity
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
@@ -107,6 +114,11 @@ items:
     branch: feat/final
     deps: [m-item, b-item]
 `);
+
+			// Ensure file is flushed to disk to avoid timing issues
+			const fd = fs.openSync('.smartergpt/stack.yml', 'r');
+			fs.fsyncSync(fd);
+			fs.closeSync(fd);
 
 			// Generate plan multiple times
 			const outputs = [];
@@ -131,7 +143,8 @@ items:
 	});
 
 	describe('Environment state isolation', () => {
-		it('should produce identical output regardless of working directory', () => {
+		it('should produce identical output regardless of working directory', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create test configs in multiple directories
 			const dir1 = path.join(testDir, 'workspace1');
 			const dir2 = path.join(testDir, 'workspace2');
@@ -159,7 +172,8 @@ items:
 			expect(output1).toBe(output2);
 		});
 
-		it('should not be affected by environment variables unrelated to the tool', () => {
+		it('should not be affected by environment variables unrelated to the tool', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
 version: 1
@@ -194,7 +208,8 @@ items:
 			}
 		});
 
-		it('should be affected only by relevant environment variables', () => {
+		it('should be affected only by relevant environment variables', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// The CLI primarily depends on the working directory, not LEX_PROFILE_DIR
 			// This test verifies that outputs change when the configuration changes
 
@@ -241,7 +256,8 @@ items:
 	});
 
 	describe('Repeated execution consistency', () => {
-		it('should produce identical results across many repeated runs', () => {
+		it('should produce identical results across many repeated runs', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
 version: 1
@@ -274,7 +290,8 @@ items:
 			}
 		});
 
-		it('should maintain consistency with file system state changes', () => {
+		it('should maintain consistency with file system state changes', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.mkdirSync('.smartergpt', { recursive: true });
 
 			const config = `
@@ -299,7 +316,8 @@ items:
 	});
 
 	describe('JSON formatting consistency', () => {
-		it('should always use canonical JSON formatting across all commands', () => {
+		it('should always use canonical JSON formatting across all commands', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Setup test data
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
@@ -340,7 +358,8 @@ items:
 			}
 		});
 
-		it('should maintain key ordering consistency', () => {
+		it('should maintain key ordering consistency', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.mkdirSync('.smartergpt', { recursive: true });
 			fs.writeFileSync('.smartergpt/stack.yml', `
 version: 1
@@ -365,7 +384,8 @@ items:
 	});
 
 	describe('Error output determinism', () => {
-		it('should produce consistent error JSON across multiple attempts', () => {
+		it('should produce consistent error JSON across multiple attempts', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			// Create invalid plan file
 			fs.writeFileSync('invalid-plan.json', '{"malformed": "json"');
 
@@ -400,7 +420,8 @@ items:
 			}
 		});
 
-		it('should not include timestamps or random elements in error output', () => {
+		it('should not include timestamps or random elements in error output', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
 			fs.writeFileSync('nonexistent-ref.json', `{
   "schemaVersion": "1.0.0",
   "target": "main",

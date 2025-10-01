@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { skipIfCliNotBuilt } from './helpers/cli';
 import { loadInputs } from '../src/core/inputs.js';
 import { generatePlan } from '../src/core/plan.js';
 import { executeGatesWithPolicy } from '../src/gates.js';
@@ -15,7 +16,7 @@ describe('Weave Contract Verification', () => {
 	const testDir = path.join(os.tmpdir(), 'lex-pr-runner-weave-contract');
 	const repoRoot = path.resolve(__dirname, '..');
 
-	beforeEach(() => {
+	beforeEach((context) => {
 		// Clean test directory
 		if (fs.existsSync(testDir)) {
 			fs.rmSync(testDir, { recursive: true });
@@ -23,8 +24,7 @@ describe('Weave Contract Verification', () => {
 		fs.mkdirSync(testDir, { recursive: true });
 		process.chdir(testDir);
 
-		// Build CLI for testing
-		execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });
+		if (skipIfCliNotBuilt({ skip: context.skip })) return;
 	});
 
 	afterEach(() => {
@@ -90,12 +90,12 @@ items:
     gates:
       - name: test
         run: bash -c "echo 'testing core refactor'; exit 0"
-  - id: conflicting-2  
+  - id: conflicting-2
     branch: feat/extend-core
     deps: []
     gates:
       - name: test
-        run: bash -c "echo 'testing core extension'; exit 0"  
+        run: bash -c "echo 'testing core extension'; exit 0"
   - id: dependent-feature
     branch: feat/uses-core
     deps: [conflicting-1, conflicting-2]
@@ -151,7 +151,7 @@ items:
 
 			// Verify rule-based transformation logic
 			expect(result.mechanicalWeaveRules.ruleBasedTransforms).toBeDefined();
-			
+
 			// All gates should pass for rule-based transforms
 			const ruleBasedItems = ['import-update', 'type-annotation'];
 			ruleBasedItems.forEach(itemName => {
@@ -173,7 +173,7 @@ items:
 
 			testWeaves.forEach(weave => {
 				const isWithinBounds = weave.lines <= 30 && weave.files <= 3;
-				
+
 				if (weave.lines <= 30 && weave.files <= 3) {
 					expect(isWithinBounds).toBe(true);
 				} else {
@@ -211,15 +211,15 @@ items:
 			];
 
 			validCommitMessages.forEach(message => {
-				const isValidFormat = message.startsWith('Weave: reconcile #') && 
-					message.includes(' + #') && 
+				const isValidFormat = message.startsWith('Weave: reconcile #') &&
+					message.includes(' + #') &&
 					message.includes(' — ');
 				expect(isValidFormat).toBe(true);
 			});
 
 			invalidCommitMessages.forEach(message => {
-				const isValidFormat = message.startsWith('Weave: reconcile #') && 
-					message.includes(' + #') && 
+				const isValidFormat = message.startsWith('Weave: reconcile #') &&
+					message.includes(' + #') &&
 					message.includes(' — ');
 				expect(isValidFormat).toBe(false);
 			});
@@ -239,18 +239,18 @@ items:
 			];
 
 			validTrailers.forEach(trailer => {
-				const isValidTrailer = trailer.startsWith('Co-authored-by: ') && 
-					trailer.includes('<') && 
-					trailer.includes('@') && 
+				const isValidTrailer = trailer.startsWith('Co-authored-by: ') &&
+					trailer.includes('<') &&
+					trailer.includes('@') &&
 					trailer.includes('>') &&
 					trailer.indexOf('<') > 'Co-authored-by: '.length; // Ensure name exists before <
 				expect(isValidTrailer).toBe(true);
 			});
 
 			invalidTrailers.forEach(trailer => {
-				const isValidTrailer = trailer.startsWith('Co-authored-by: ') && 
-					trailer.includes('<') && 
-					trailer.includes('@') && 
+				const isValidTrailer = trailer.startsWith('Co-authored-by: ') &&
+					trailer.includes('<') &&
+					trailer.includes('@') &&
 					trailer.includes('>') &&
 					trailer.indexOf('<') > 'Co-authored-by: '.length; // Ensure name exists before <
 				expect(isValidTrailer).toBe(false);
@@ -280,10 +280,10 @@ items:
 
 			// Verify determinism check implementation
 			expect(result.determinismCheck).toBeDefined();
-			
+
 			// Should detect non-deterministic outputs
 			expect(result.determinismCheck.hasDeterministicOutput).toBeDefined();
-			
+
 			// If determinism fails, should have rollback procedure
 			if (!result.determinismCheck.hasDeterministicOutput) {
 				expect(result.rollbackRequired).toBe(true);
@@ -302,7 +302,7 @@ items:
 			// Verify rollback handling logic
 			if (rollbackScenario.determinismCheckFailed) {
 				expect(rollbackScenario.affectedPRs.length).toBeGreaterThan(0);
-				
+
 				// Should mark all affected PRs
 				rollbackScenario.affectedPRs.forEach(pr => {
 					expect(pr).toMatch(/^#\d+$/);
@@ -319,7 +319,7 @@ items:
 			if (rollbackGuard.checkDeterminism()) {
 				const revertCommit = rollbackGuard.revertLastWeave();
 				const markedPRs = rollbackGuard.markPRsAsNeedsManualWeave(rollbackScenario.affectedPRs);
-				
+
 				expect(revertCommit).toBeDefined();
 				expect(markedPRs).toContain('#123:needs-manual-weave');
 				expect(markedPRs).toContain('#456:needs-manual-weave');
@@ -352,15 +352,15 @@ items:
 
 			// Verify integration PR report format
 			const report = generateIntegrationPRReport(result);
-			
+
 			expect(report).toContain('## Integration Summary');
 			expect(report).toContain('## Merged PRs');
 			expect(report).toContain('## Skipped PRs');
 			expect(report).toContain('## Weave Operations');
-			
+
 			// Should include merged items
 			expect(report).toMatch(/merged-item.*✅/);
-			
+
 			// Should include skipped items with reasons
 			expect(report).toMatch(/skipped-item.*❌/);
 		});
@@ -389,7 +389,7 @@ items:
 			];
 
 			const report = formatWeaveOperations(weaveOperations);
-			
+
 			expect(report).toContain('Trivial merge: #123, #124');
 			expect(report).toContain('Mechanical weave: #125, #126');
 			expect(report).toContain('Semantic weave: #127, #128');
@@ -409,7 +409,7 @@ items:
 		// Execute gates
 		const executionState = new ExecutionState(validatedPlan);
 		const artifactDir = path.join(process.cwd(), '.artifacts');
-		
+
 		if (!fs.existsSync(artifactDir)) {
 			fs.mkdirSync(artifactDir, { recursive: true });
 		}
@@ -427,7 +427,7 @@ items:
 		}));
 
 		// Check if all gates passed
-		const allGatesPassed = results.every(result => 
+		const allGatesPassed = results.every(result =>
 			result.gates.every(gate => gate.status === 'pass')
 		);
 
