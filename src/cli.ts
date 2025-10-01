@@ -15,6 +15,7 @@ import { readGateDir, generateMarkdownSummary } from "./report/aggregate.js";
 import { createGitHubAPI, GitHubAPI, GitHubAPIError } from "./github/api.js";
 import { createGitOperations, GitOperationError } from "./git/operations.js";
 import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
+import { WriteProtectionError } from "./config/profileResolver.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -824,8 +825,16 @@ program
 			if (opts.bootstrap) {
 				console.log("");
 				console.log("🔧 Creating minimal workspace configuration...");
-				createMinimalWorkspace();
-				console.log("✓ Minimal configuration created");
+				try {
+					createMinimalWorkspace();
+					console.log("✓ Minimal configuration created");
+				} catch (error) {
+					if (error instanceof WriteProtectionError) {
+						console.error(`❌ ${error.message}`);
+						process.exit(2);
+					}
+					throw error;
+				}
 			} else {
 				console.log("");
 				console.log("💡 Use --bootstrap to create minimal configuration");
@@ -1023,6 +1032,10 @@ program
 				}
 			}
 		} catch (error) {
+			if (error instanceof WriteProtectionError) {
+				console.error(`Error bootstrapping workspace: ${error.message}`);
+				process.exit(2); // Validation/config error
+			}
 			console.error(`Error bootstrapping workspace: ${error instanceof Error ? error.message : String(error)}`);
 			process.exit(1);
 		}

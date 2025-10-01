@@ -31,6 +31,7 @@ import {
 	GatesRunResult,
 	MergeApplyResult,
 } from "./types.js";
+import { resolveProfile, validateWriteOperation, WriteProtectionError } from "../config/profileResolver.js";
 
 import * as fs from "fs";
 import * as path from "path";
@@ -144,14 +145,22 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 	try {
 		const env = getMCPEnvironment();
 		
+		// Resolve profile and validate write permissions
+		const resolved = resolveProfile(undefined, process.cwd());
+		const profilePath = resolved.path;
+		const role = resolved.manifest.role;
+		
 		// Load inputs from the profile directory
-		const inputs = loadInputs(env.LEX_PROFILE_DIR);
+		const inputs = loadInputs(profilePath);
 		
 		// Generate plan
 		const plan = generatePlan(inputs);
 		
 		// Determine output directory
-		const outDir = args.outDir || path.join(env.LEX_PROFILE_DIR, "runner");
+		const outDir = args.outDir || path.join(profilePath, "runner");
+		
+		// Validate write operation is allowed
+		validateWriteOperation(profilePath, role, "write plan artifacts");
 		
 		// Ensure output directory exists
 		if (!fs.existsSync(outDir)) {
@@ -183,6 +192,12 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 		};
 		
 	} catch (error) {
+		if (error instanceof WriteProtectionError) {
+			throw new McpError(
+				ErrorCode.InvalidRequest,
+				error.message
+			);
+		}
 		throw new McpError(
 			ErrorCode.InternalError,
 			`Failed to create plan: ${error instanceof Error ? error.message : String(error)}`
