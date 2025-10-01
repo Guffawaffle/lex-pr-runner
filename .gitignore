@@ -33,6 +33,9 @@ out*.json
 .smartergpt/deliverables/
 .smartergpt/gate-results/
 
+# Local overlay (development only, not tracked)
+.smartergpt.local/
+
 # Generated plan artifacts (runtime)
 snapshot.md
 plan-*.json

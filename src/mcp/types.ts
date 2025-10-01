@@ -44,6 +44,11 @@ export const MergeApplyArgs = z.object({
 });
 export type MergeApplyArgs = z.infer<typeof MergeApplyArgs>;
 
+export const InitLocalArgs = z.object({
+	force: z.boolean().optional()
+});
+export type InitLocalArgs = z.infer<typeof InitLocalArgs>;
+
 /**
  * MCP tool result types
  */
@@ -68,4 +73,16 @@ export interface GatesRunResult {
 export interface MergeApplyResult {
 	allowed: boolean;
 	message: string;
+}
+
+export interface InitLocalResult {
+	created: boolean;
+	path: string;
+	config: {
+		role: string;
+		projectType: string;
+		name?: string;
+		version?: string;
+	};
+	copiedFiles: string[];
 }
