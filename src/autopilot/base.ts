@@ -76,13 +76,47 @@ export class AutopilotLevel0 extends AutopilotBase {
 	async execute(): Promise<AutopilotResult> {
 		const levels = this.computeMergeOrder();
 		const recommendations = this.generateRecommendations();
+		const plan = this.context.plan;
 
+		// Build detailed merge order visualization
+		const mergeOrderLines: string[] = [];
+		levels.forEach((level, index) => {
+			const levelItems = level.map(itemId => {
+				const item = plan.items.find(i => i.name === itemId);
+				const deps = item?.deps || [];
+				const depStr = deps.length > 0 ? ` (depends on: ${deps.join(", ")})` : " (independent)";
+				return `${itemId}${depStr}`;
+			});
+			mergeOrderLines.push(`  Level ${index + 1}: ${levelItems.join(", ")}`);
+		});
+
+		// Analyze gates
+		const totalGates = plan.items.reduce((sum, item) => sum + item.gates.length, 0);
+		const gateNames = plan.items.flatMap(item => 
+			item.gates.map(g => typeof g === 'string' ? g : g.name)
+		);
+		const uniqueGateNames = new Set(gateNames);
+
+		// Build comprehensive report
 		const message = [
-			"Level 0: Report-only analysis complete",
-			`Plan has ${this.context.plan.items.length} items in ${levels.length} levels`,
+			"🔍 Merge-Weave Analysis (Level 0: Report Only)",
 			"",
-			"Recommendations:",
-			...recommendations.map(r => `  - ${r}`)
+			"📋 Plan Overview:",
+			`  • ${plan.items.length} items in dependency graph`,
+			`  • ${levels.length} merge levels identified`,
+			`  • ${totalGates} total gate executions required`,
+			`  • ${uniqueGateNames.size} unique gate types: ${Array.from(uniqueGateNames).join(", ")}`,
+			"",
+			"🔀 Merge Order:",
+			...mergeOrderLines,
+			"",
+			"🎯 Recommendations:",
+			...recommendations.map((r, i) => `  ${i + 1}. ${r}`),
+			"",
+			"💡 Next Steps:",
+			"  • Run: lex-pr-runner autopilot <plan> --level 1",
+			"  • Or: lex-pr-runner weave <plan> --max-level 1 --dry-run",
+			"  • Review integration strategy before proceeding to higher levels"
 		].join("\n");
 
 		return {

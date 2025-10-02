@@ -59,9 +59,10 @@ describe('CLI autopilot command', () => {
 			{ encoding: 'utf-8', cwd: process.cwd() }
 		);
 
-		expect(output).toContain('Level 0: Report-only analysis complete');
-		expect(output).toContain('Plan has 2 items in 2 levels');
-		expect(output).toContain('Recommendations:');
+		expect(output).toContain('🔍 Merge-Weave Analysis (Level 0: Report Only)');
+		expect(output).toContain('2 items in dependency graph');
+		expect(output).toContain('🔀 Merge Order:');
+		expect(output).toContain('🎯 Recommendations:');
 	});
 
 	it('should run level 0 autopilot with JSON output', () => {
@@ -136,7 +137,7 @@ describe('CLI autopilot command', () => {
 			{ encoding: 'utf-8', cwd: process.cwd() }
 		);
 
-		expect(output).toContain('Level 0: Report-only analysis complete');
+		expect(output).toContain('🔍 Merge-Weave Analysis (Level 0: Report Only)');
 	});
 
 	it('should error on invalid level', () => {
