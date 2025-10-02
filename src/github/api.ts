@@ -29,6 +29,7 @@ export interface GitHubPullRequest {
 	baseBranch: string;
 	createdAt: string;
 	updatedAt: string;
+	mergeable?: boolean;
 }
 
 export interface GitHubConfig {
@@ -122,6 +123,84 @@ export class GitHubAPI {
 			return {
 				authenticated: false,
 			};
+		}
+	}
+
+	/**
+	 * Get a specific pull request by number
+	 */
+	async getPullRequest(prNumber: number): Promise<GitHubPullRequest | null> {
+		try {
+			const { data: pull } = await this.octokit.rest.pulls.get({
+				owner: this.config.owner,
+				repo: this.config.repo,
+				pull_number: prNumber,
+			});
+
+			return {
+				number: pull.number,
+				title: pull.title,
+				branch: pull.head.ref,
+				sha: pull.head.sha,
+				state: pull.state as "open" | "closed" | "merged",
+				labels: stableSort(pull.labels.map(extractLabelName)),
+				author: pull.user?.login || 'unknown',
+				baseBranch: pull.base.ref,
+				createdAt: pull.created_at,
+				updatedAt: pull.updated_at,
+				mergeable: pull.mergeable ?? undefined,
+			};
+		} catch (error) {
+			return null;
+		}
+	}
+
+	/**
+	 * Add a label to a pull request
+	 */
+	async addLabel(prNumber: number, label: string): Promise<void> {
+		try {
+			await this.octokit.rest.issues.addLabels({
+				owner: this.config.owner,
+				repo: this.config.repo,
+				issue_number: prNumber,
+				labels: [label],
+			});
+		} catch (error) {
+			throw new GitHubAPIError(`Failed to add label to PR #${prNumber}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	/**
+	 * Remove a label from a pull request
+	 */
+	async removeLabel(prNumber: number, label: string): Promise<void> {
+		try {
+			await this.octokit.rest.issues.removeLabel({
+				owner: this.config.owner,
+				repo: this.config.repo,
+				issue_number: prNumber,
+				name: label,
+			});
+		} catch (error) {
+			throw new GitHubAPIError(`Failed to remove label from PR #${prNumber}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	/**
+	 * Get labels for a pull request
+	 */
+	async getLabels(prNumber: number): Promise<string[]> {
+		try {
+			const { data: issue } = await this.octokit.rest.issues.get({
+				owner: this.config.owner,
+				repo: this.config.repo,
+				issue_number: prNumber,
+			});
+
+			return stableSort(issue.labels.map(extractLabelName));
+		} catch (error) {
+			throw new GitHubAPIError(`Failed to get labels for PR #${prNumber}: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 }
