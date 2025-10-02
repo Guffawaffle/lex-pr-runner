@@ -242,6 +242,73 @@ program
 		}
 	});
 
+// Autopilot command
+program
+	.command("autopilot")
+	.description("Run autopilot analysis and artifact generation")
+	.option("--plan <file>", "Path to plan.json file")
+	.argument("[file]", "Path to plan.json file (alternative to --plan)")
+	.option("--level <level>", "Autopilot level (0=report-only, 1=artifacts)", "1")
+	.option("--profile-dir <dir>", "Profile directory (default: .smartergpt)")
+	.option("--json", "Output JSON format")
+	.action(async (file: string | undefined, opts) => {
+		const planFile = opts.plan || file;
+		if (!planFile) {
+			console.error("Error: plan file is required (use --plan <file> or provide as argument)");
+			process.exit(1);
+		}
+
+		try {
+			// Load plan
+			const planContent = fs.readFileSync(planFile, "utf-8");
+			const plan = loadPlan(planContent);
+
+			// Resolve profile
+			const profile = resolveProfile(opts.profileDir);
+
+			// Import autopilot modules
+			const { AutopilotLevel0, AutopilotLevel1 } = await import("./autopilot/index.js");
+
+			// Create autopilot context
+			const context = {
+				plan,
+				profilePath: profile.path,
+				profileRole: profile.manifest.role
+			};
+
+			// Select and execute autopilot level
+			const level = parseInt(opts.level);
+			let autopilot;
+
+			if (level === 0) {
+				autopilot = new AutopilotLevel0(context);
+			} else if (level === 1) {
+				autopilot = new AutopilotLevel1(context);
+			} else {
+				console.error(`Error: unsupported autopilot level ${level} (supported: 0, 1)`);
+				process.exit(1);
+			}
+
+			const result = await autopilot.execute();
+
+			if (opts.json) {
+				console.log(canonicalJSONStringify(result));
+			} else {
+				console.log(result.message);
+			}
+
+			process.exit(result.success ? 0 : 1);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (opts.json) {
+				console.log(canonicalJSONStringify({ success: false, error: message }));
+			} else {
+				console.error(`Error running autopilot: ${message}`);
+			}
+			exitWith(error);
+		}
+	});
+
 // Execute plan command (replaces gate command)
 program
 	.command("execute")
