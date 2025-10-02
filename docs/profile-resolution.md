@@ -1,6 +1,6 @@
 # Profile Resolution
 
-**Status:** Stable (v0.1.0)  
+**Status:** Stable (v0.1.0)
 **Last Updated:** 2025-10-02
 
 ## Overview

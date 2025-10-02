@@ -312,4 +312,87 @@ items:
 			}
 		});
 	});
+
+	describe('Weave Reporting & Matrix Generation (Planned)', () => {
+		/**
+		 * Test stubs for matrix generation and weave reporting
+		 * See: docs/cli-mcp-weave-reporting.md
+		 * Related: Epic #76 (Developer Experience), Issue #40
+		 */
+
+		it.skip('should generate integration matrix from plan', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Implement matrix.generate CLI command
+			// Expected usage: npm run cli -- matrix --from-plan plan.json
+			// Expected output shape: { schemaVersion, generated, plan, execution, policy }
+
+			const validPlan = {
+				schemaVersion: '1.0.0',
+				target: 'main',
+				items: [
+					{ name: 'item-1', deps: [], gates: [{ name: 'lint', run: 'npm run lint', env: {} }] },
+					{ name: 'item-2', deps: ['item-1'], gates: [{ name: 'test', run: 'npm test', env: {} }] }
+				]
+			};
+			fs.writeFileSync('plan.json', canonicalJSONStringify(validPlan));
+
+			// const output = execSync(`node ${cliPath} matrix --from-plan plan.json --json`, {
+			// 	encoding: 'utf8'
+			// });
+			// const matrix = JSON.parse(output);
+			// expect(matrix).toHaveProperty('execution.levels');
+			// expect(matrix.execution.levels).toHaveLength(2);
+			// expect(matrix.execution.levels[0].items).toEqual(['item-1']);
+			// expect(matrix.execution.levels[1].items).toEqual(['item-2']);
+		});
+
+		it.skip('should include gate commands in matrix output', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Matrix should include all gate definitions with commands
+			// Expected: matrix.execution.gates[] with { item, gate, command, timeout, env }
+		});
+
+		it.skip('should mark parallel levels correctly in matrix', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Detect when items can run in parallel (no dependencies between them)
+			// Expected: matrix.execution.levels[n].parallel = true/false
+		});
+
+		it.skip('should produce deterministic matrix output', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Ensure matrix generation is deterministic
+			// Multiple runs with same plan should produce identical byte output
+		});
+
+		it.skip('should include policy configuration in matrix', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Include retry configs, max workers, etc. from plan policy
+			// Expected: matrix.policy = { maxWorkers, retryConfigs }
+		});
+
+		it.skip('should support matrix filtering by item', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Add --items flag to filter matrix to specific items
+			// Expected: npm run cli -- matrix --from-plan plan.json --items item-1,item-2
+		});
+
+		it.skip('should support matrix filtering by gate', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Add --gates flag to filter matrix to specific gate types
+			// Expected: npm run cli -- matrix --from-plan plan.json --gates lint,type
+		});
+
+		it.skip('should generate workflow templates from matrix', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Generate CI/CD workflow definitions from matrix
+			// Expected: npm run cli -- matrix --from-plan plan.json --format github-actions
+			// Expected: npm run cli -- matrix --from-plan plan.json --format gitlab-ci
+		});
+
+		it.skip('should include timing predictions in matrix', (ctx) => {
+			if (skipIfCliNotBuilt({ skip: ctx.skip })) return;
+			// TODO: Add historical timing data for gates
+			// Expected: matrix.execution.gates[].estimatedDuration based on history
+		});
+	});
 });
