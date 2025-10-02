@@ -2,6 +2,8 @@
 
 Complete reference for the lex-pr-runner command-line interface, including all subcommands, options, and JSON output schemas.
 
+> **📖 See Also**: [Autopilot Levels](./autopilot-levels.md) - Comprehensive guide to automation levels 0-4
+
 ## Global Options
 
 ```bash
@@ -250,15 +252,24 @@ Execute plan with policy-aware gate running and status tracking.
 lex-pr execute [options] [file]
 
 Arguments:
-  file              Path to plan.json file (alternative to --plan)
+  file                       Path to plan.json file (alternative to --plan)
 
 Options:
-  --plan <file>     Path to plan.json file
-  --only-item <name> Execute gates for specific item only
-  --json            Output JSON format
-  --out <dir>       Output directory for execution state (default: ".smartergpt/runner")
-  -h, --help        Display help for command
+  --plan <file>              Path to plan.json file
+  --artifact-dir <dir>       Output directory for artifacts (default: "./artifacts")
+  --timeout <ms>             Gate timeout in milliseconds (default: "30000")
+  --dry-run                  Validate plan and show execution order without running gates
+  --json                     Output results in JSON format
+  --status-table             Generate status table for PR comments
+  --max-level <level>        Maximum autopilot level (0-4) (default: "0")
+  --open-pr                  Open pull requests for integration branches (Level 3+)
+  --close-superseded         Close superseded PRs after integration (Level 4)
+  --comment-template <path>  Path to PR comment template (Level 2+)
+  --branch-prefix <prefix>   Prefix for integration branch names (default: "integration/")
+  -h, --help                 Display help for command
 ```
+
+> **📖 Autopilot Levels**: See [Autopilot Levels](./autopilot-levels.md) for details on automation levels 0-4.
 
 #### Examples
 

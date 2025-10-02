@@ -17,6 +17,7 @@ import { createGitOperations, GitOperationError } from "./git/operations.js";
 import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvironmentSuggestions } from "./core/bootstrap.js";
 import { initLocalOverlay, hasLocalOverlay } from "./config/localOverlay.js";
 import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
+import { parseAutopilotConfig, AutopilotConfigError, getAutopilotLevelDescription, AutopilotLevel } from "./autopilot/index.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -30,7 +31,7 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
     console.error(err.message);
     process.exit(2);
   }
-  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError || e instanceof WriteProtectionError) {
+  if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError || e instanceof WriteProtectionError || e instanceof AutopilotConfigError) {
     console.error(String(err?.message ?? e));
     process.exit(2); // Validation errors
   }
@@ -320,10 +321,43 @@ program
 	.option("--dry-run", "Validate plan and show execution order without running gates")
 	.option("--json", "Output results in JSON format")
 	.option("--status-table", "Generate status table for PR comments")
+	.option("--max-level <level>", "Maximum autopilot level (0-4)", "0")
+	.option("--open-pr", "Open pull requests for integration branches (Level 3+)")
+	.option("--close-superseded", "Close superseded PRs after integration (Level 4)")
+	.option("--comment-template <path>", "Path to PR comment template (Level 2+)")
+	.option("--branch-prefix <prefix>", "Prefix for integration branch names", "integration/")
 	.action(async (file: string | undefined, opts) => {
 		const planFile = opts.plan || file || "plan.json";
 
 		try {
+			// Parse and validate autopilot configuration
+			let autopilotConfig;
+			try {
+				autopilotConfig = parseAutopilotConfig({
+					maxLevel: parseInt(opts.maxLevel),
+					dryRun: opts.dryRun,
+					openPr: opts.openPr,
+					closeSuperseded: opts.closeSuperseded,
+					commentTemplate: opts.commentTemplate,
+					branchPrefix: opts.branchPrefix
+				});
+			} catch (error) {
+				if (error instanceof AutopilotConfigError) {
+					console.error(`Configuration Error: ${error.message}`);
+					process.exit(2);
+				}
+				throw error;
+			}
+
+			// Show autopilot configuration if not in JSON mode
+			if (!opts.json && autopilotConfig.maxLevel > AutopilotLevel.ReportOnly) {
+				console.log(`🤖 Autopilot Level ${autopilotConfig.maxLevel}: ${getAutopilotLevelDescription(autopilotConfig.maxLevel)}`);
+				if (autopilotConfig.dryRun) {
+					console.log("   Mode: Dry run (preview only)");
+				}
+				console.log("");
+			}
+
 			const planContent = fs.readFileSync(planFile, "utf-8");
 			const plan = loadPlan(planContent);
 			const timeoutMs = parseInt(opts.timeout);
@@ -598,8 +632,47 @@ program
 	.option("--execute", "Actually perform merge operations")
 	.option("--cleanup", "Clean up integration branches after execution")
 	.option("--json", "Output JSON format")
+	.option("--max-level <level>", "Maximum autopilot level (0-4)", "0")
+	.option("--open-pr", "Open pull requests for integration branches (Level 3+)")
+	.option("--close-superseded", "Close superseded PRs after integration (Level 4)")
+	.option("--comment-template <path>", "Path to PR comment template (Level 2+)")
+	.option("--branch-prefix <prefix>", "Prefix for integration branch names", "integration/")
 	.action(async (opts) => {
 		try {
+			// Parse and validate autopilot configuration
+			let autopilotConfig;
+			try {
+				autopilotConfig = parseAutopilotConfig({
+					maxLevel: parseInt(opts.maxLevel),
+					dryRun: opts.dryRun && !opts.execute,
+					openPr: opts.openPr,
+					closeSuperseded: opts.closeSuperseded,
+					commentTemplate: opts.commentTemplate,
+					branchPrefix: opts.branchPrefix
+				});
+			} catch (error) {
+				if (error instanceof AutopilotConfigError) {
+					console.error(`Configuration Error: ${error.message}`);
+					process.exit(2);
+				}
+				throw error;
+			}
+
+			// Show autopilot configuration if not in JSON mode
+			if (!opts.json && autopilotConfig.maxLevel > AutopilotLevel.ReportOnly) {
+				console.log(`🤖 Autopilot Level ${autopilotConfig.maxLevel}: ${getAutopilotLevelDescription(autopilotConfig.maxLevel)}`);
+				if (autopilotConfig.dryRun) {
+					console.log("   Mode: Dry run (preview only)");
+				}
+				if (autopilotConfig.openPR) {
+					console.log("   Open PRs: enabled");
+				}
+				if (autopilotConfig.closeSuperseded) {
+					console.log("   Close superseded: enabled");
+				}
+				console.log("");
+			}
+
 			// Load plan
 			if (!fs.existsSync(opts.plan)) {
 				console.error(`Error: Plan file ${opts.plan} not found`);
