@@ -14,7 +14,7 @@ describe('MCP Contract Tests', () => {
 		
 		// Create test directory
 		testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-test-'));
-		process.env.LEX_PROFILE_DIR = testDir;
+		process.env.LEX_PR_PROFILE_DIR = testDir;
 		process.env.ALLOW_MUTATIONS = 'false';
 		process.chdir(testDir);
 	});
@@ -72,11 +72,11 @@ describe('MCP Contract Tests', () => {
 
 	describe('Environment variable handling', () => {
 		it('should use correct default values', () => {
-			delete process.env.LEX_PROFILE_DIR;
+			delete process.env.LEX_PR_PROFILE_DIR;
 			delete process.env.ALLOW_MUTATIONS;
 
 			const env = getMCPEnvironment();
-			expect(env.LEX_PROFILE_DIR).toBe('.smartergpt');
+			expect(env.LEX_PR_PROFILE_DIR).toBeUndefined();
 			expect(env.ALLOW_MUTATIONS).toBe(false);
 		});
 
@@ -93,12 +93,12 @@ describe('MCP Contract Tests', () => {
 			expect(getMCPEnvironment().ALLOW_MUTATIONS).toBe(true);
 		});
 
-		it('should use custom LEX_PROFILE_DIR', () => {
+		it('should use custom LEX_PR_PROFILE_DIR', () => {
 			const customPath = '/custom/profile/path';
-			process.env.LEX_PROFILE_DIR = customPath;
+			process.env.LEX_PR_PROFILE_DIR = customPath;
 
 			const env = getMCPEnvironment();
-			expect(env.LEX_PROFILE_DIR).toBe(customPath);
+			expect(env.LEX_PR_PROFILE_DIR).toBe(customPath);
 		});
 	});
 
@@ -121,11 +121,11 @@ describe('MCP Contract Tests', () => {
 		it('should handle missing files gracefully in environment setup', () => {
 			// Test that missing profile directory doesn't crash getMCPEnvironment
 			const customDir = path.join(testDir, 'nonexistent');
-			process.env.LEX_PROFILE_DIR = customDir;
+			process.env.LEX_PR_PROFILE_DIR = customDir;
 			
 			expect(() => getMCPEnvironment()).not.toThrow();
 			const env = getMCPEnvironment();
-			expect(env.LEX_PROFILE_DIR).toBe(customDir);
+			expect(env.LEX_PR_PROFILE_DIR).toBe(customDir);
 		});
 	});
 
@@ -179,14 +179,14 @@ describe('MCP Contract Tests', () => {
 
 	describe('MCP environment configuration determinism', () => {
 		it('should produce consistent environment configs', () => {
-			process.env.LEX_PROFILE_DIR = '/test/path';
+			process.env.LEX_PR_PROFILE_DIR = '/test/path';
 			process.env.ALLOW_MUTATIONS = 'true';
 
 			const env1 = getMCPEnvironment();
 			const env2 = getMCPEnvironment();
 
 			expect(env1).toEqual(env2);
-			expect(env1.LEX_PROFILE_DIR).toBe(env2.LEX_PROFILE_DIR);
+			expect(env1.LEX_PR_PROFILE_DIR).toBe(env2.LEX_PR_PROFILE_DIR);
 			expect(env1.ALLOW_MUTATIONS).toBe(env2.ALLOW_MUTATIONS);
 		});
 

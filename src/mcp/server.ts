@@ -29,10 +29,12 @@ import {
 	GatesRunArgs,
 	MergeApplyArgs,
 	InitLocalArgs,
+	ProfileResolveArgs,
 	PlanCreateResult,
 	GatesRunResult,
 	MergeApplyResult,
 	InitLocalResult,
+	ProfileResolveResult,
 } from "./types.js";
 import { resolveProfile, validateWriteOperation, WriteProtectionError } from "../config/profileResolver.js";
 
@@ -71,7 +73,7 @@ function createServer(): Server {
 								default: false,
 							},
 							outDir: {
-								type: "string", 
+								type: "string",
 								description: "Output directory for plan artifacts",
 							},
 						},
@@ -126,6 +128,19 @@ function createServer(): Server {
 						},
 					},
 				},
+				{
+					name: "profile.resolve",
+					description: "Resolve profile directory using precedence chain (--profile-dir → LEX_PR_PROFILE_DIR → .smartergpt.local/ → .smartergpt/)",
+					inputSchema: {
+						type: "object",
+						properties: {
+							profileDir: {
+								type: "string",
+								description: "Optional profile directory override",
+							},
+						},
+					},
+				},
 			],
 		};
 	});
@@ -137,16 +152,19 @@ function createServer(): Server {
 		switch (name) {
 			case "plan.create":
 				return await handlePlanCreate(args as PlanCreateArgs);
-			
+
 			case "gates.run":
 				return await handleGatesRun(args as GatesRunArgs);
-			
+
 			case "merge.apply":
 				return await handleMergeApply(args as MergeApplyArgs);
-			
+
 			case "local.init":
 				return await handleLocalInit(args as InitLocalArgs);
-			
+
+			case "profile.resolve":
+				return await handleProfileResolve(args as ProfileResolveArgs);
+
 			default:
 				throw new McpError(
 					ErrorCode.MethodNotFound,
@@ -164,44 +182,44 @@ function createServer(): Server {
 async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ type: "text", text: string }] }> {
 	try {
 		const env = getMCPEnvironment();
-		
+
 		// Resolve profile and validate write permissions
 		const resolved = resolveProfile(undefined, process.cwd());
 		const profilePath = resolved.path;
 		const role = resolved.manifest.role;
-		
+
 		// Load inputs from the profile directory
 		const inputs = loadInputs(profilePath);
-		
+
 		// Generate plan
 		const plan = generatePlan(inputs);
-		
+
 		// Determine output directory
 		const outDir = args.outDir || path.join(profilePath, "runner");
-		
+
 		// Validate write operation is allowed
 		validateWriteOperation(profilePath, role, "write plan artifacts");
-		
+
 		// Ensure output directory exists
 		if (!fs.existsSync(outDir)) {
 			fs.mkdirSync(outDir, { recursive: true });
 		}
-		
+
 		// Write plan.json
 		const planPath = path.join(outDir, "plan.json");
 		const planJson = canonicalJSONStringify(plan);
 		fs.writeFileSync(planPath, planJson + "\n");
-		
+
 		// Generate snapshot
 		const snapshot = generateSnapshot(plan, inputs);
 		const snapshotPath = path.join(outDir, "snapshot.md");
 		fs.writeFileSync(snapshotPath, snapshot);
-		
+
 		const result: PlanCreateResult = {
 			plan: plan,
 			outDir: outDir
 		};
-		
+
 		return {
 			content: [
 				{
@@ -210,7 +228,7 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 				}
 			]
 		};
-		
+
 	} catch (error) {
 		if (error instanceof WriteProtectionError) {
 			throw new McpError(
@@ -231,68 +249,71 @@ async function handlePlanCreate(args: PlanCreateArgs): Promise<{ content: [{ typ
 async function handleGatesRun(args: GatesRunArgs): Promise<{ content: [{ type: "text", text: string }] }> {
 	try {
 		const env = getMCPEnvironment();
-		
-		// Load plan from profile directory
-		const planPath = path.join(env.LEX_PROFILE_DIR, "runner", "plan.json");
+
+		// Resolve profile directory
+		const resolved = resolveProfile(env.LEX_PR_PROFILE_DIR, process.cwd());
+
+		// Load plan from resolved profile directory
+		const planPath = path.join(resolved.path, "runner", "plan.json");
 		if (!fs.existsSync(planPath)) {
 			throw new Error("No plan found. Run plan.create first.");
 		}
-		
+
 		const planContent = fs.readFileSync(planPath, "utf-8");
 		const plan = loadPlan(planContent);
-		
+
 		// Create execution state
 		const executionState = new ExecutionState(plan);
-		
+
 		// Determine output directory
-		const outDir = args.outDir || path.join(env.LEX_PROFILE_DIR, "runner", "gates");
-		
+		const outDir = args.outDir || path.join(resolved.path, "runner", "gates");
+
 		// Execute gates (this modifies executionState in place)
 		await executeGatesWithPolicy(
 			plan,
 			executionState,
 			outDir
 		);
-		
+
 		// Get results from execution state
 		const results = executionState.getResults();
-		
+
 		// Transform results to expected format
 		const items = [];
 		let allGreen = true;
-		
+
 		for (const [itemName, nodeResult] of results) {
 			// Filter by onlyItem if specified
 			if (args.onlyItem && itemName !== args.onlyItem) {
 				continue;
 			}
-			
+
 			// Filter gates by onlyGate if specified
-			const gates = nodeResult.gates?.filter(gate => 
+			const gates = nodeResult.gates?.filter(gate =>
 				!args.onlyGate || gate.gate === args.onlyGate
 			).map((gate: any) => ({
 				name: gate.gate,
 				status: gate.status
 			})) || [];
-			
+
 			const itemResult = {
 				name: itemName,
 				status: nodeResult.status || "unknown",
 				gates: gates
 			};
-			
+
 			items.push(itemResult);
-			
+
 			if (nodeResult.status !== "pass") {
 				allGreen = false;
 			}
 		}
-		
+
 		const result: GatesRunResult = {
 			items,
 			allGreen
 		};
-		
+
 		return {
 			content: [
 				{
@@ -301,7 +322,7 @@ async function handleGatesRun(args: GatesRunArgs): Promise<{ content: [{ type: "
 				}
 			]
 		};
-		
+
 	} catch (error) {
 		throw new McpError(
 			ErrorCode.InternalError,
@@ -316,14 +337,14 @@ async function handleGatesRun(args: GatesRunArgs): Promise<{ content: [{ type: "
 async function handleMergeApply(args: MergeApplyArgs): Promise<{ content: [{ type: "text", text: string }] }> {
 	try {
 		const env = getMCPEnvironment();
-		
+
 		// Check if mutations are allowed
 		if (!env.ALLOW_MUTATIONS && !args.dryRun) {
 			const result: MergeApplyResult = {
 				allowed: false,
 				message: "Mutations not allowed. Set ALLOW_MUTATIONS=true or use dryRun=true."
 			};
-			
+
 			return {
 				content: [
 					{
@@ -333,35 +354,38 @@ async function handleMergeApply(args: MergeApplyArgs): Promise<{ content: [{ typ
 				]
 			};
 		}
-		
+
+		// Resolve profile directory
+		const resolved = resolveProfile(env.LEX_PR_PROFILE_DIR, process.cwd());
+
 		// Load plan and execution state
-		const planPath = path.join(env.LEX_PROFILE_DIR, "runner", "plan.json");
+		const planPath = path.join(resolved.path, "runner", "plan.json");
 		if (!fs.existsSync(planPath)) {
 			throw new Error("No plan found. Run plan.create first.");
 		}
-		
+
 		const planContent = fs.readFileSync(planPath, "utf-8");
 		const plan = loadPlan(planContent);
-		
+
 		const executionState = new ExecutionState(plan);
-		
+
 		// TODO: Load actual execution results if available
 		// For now, assume we're in read-only mode
-		
+
 		const evaluator = new MergeEligibilityEvaluator(plan, executionState);
 		const decisions = evaluator.evaluateAllNodes();
-		
+
 		const summary = evaluator.getMergeSummary();
-		
+
 		const result: MergeApplyResult = {
 			allowed: env.ALLOW_MUTATIONS && !args.dryRun,
-			message: args.dryRun 
+			message: args.dryRun
 				? `Dry run: ${summary.eligible.length} items eligible, ${summary.failed.length} failed`
-				: env.ALLOW_MUTATIONS 
+				: env.ALLOW_MUTATIONS
 					? `Ready to merge ${summary.eligible.length} eligible items`
 					: "Mutations disabled. Set ALLOW_MUTATIONS=true to enable merging."
 		};
-		
+
 		return {
 			content: [
 				{
@@ -370,7 +394,7 @@ async function handleMergeApply(args: MergeApplyArgs): Promise<{ content: [{ typ
 				}
 			]
 		};
-		
+
 	} catch (error) {
 		throw new McpError(
 			ErrorCode.InternalError,
@@ -386,14 +410,14 @@ async function handleLocalInit(args: InitLocalArgs): Promise<{ content: [{ type:
 	try {
 		const force = args.force ?? false;
 		const result = initLocalOverlay(process.cwd(), force);
-		
+
 		const output: InitLocalResult = {
 			created: result.created,
 			path: result.path,
 			config: result.config,
 			copiedFiles: result.copiedFiles
 		};
-		
+
 		return {
 			content: [
 				{
@@ -402,11 +426,49 @@ async function handleLocalInit(args: InitLocalArgs): Promise<{ content: [{ type:
 				}
 			]
 		};
-		
+
 	} catch (error) {
 		throw new McpError(
 			ErrorCode.InternalError,
 			`Failed to initialize local overlay: ${error instanceof Error ? error.message : String(error)}`
+		);
+	}
+}
+
+/**
+ * Handle profile.resolve tool
+ */
+async function handleProfileResolve(args: ProfileResolveArgs): Promise<{ content: [{ type: "text", text: string }] }> {
+	try {
+		const env = getMCPEnvironment();
+
+		// Use profile directory from args, or fall back to env, or use resolveProfile default logic
+		const profileDirOverride = args.profileDir || env.LEX_PR_PROFILE_DIR;
+		const resolved = resolveProfile(profileDirOverride, process.cwd());
+
+		const output: ProfileResolveResult = {
+			path: resolved.path,
+			source: resolved.source,
+			manifest: {
+				role: resolved.manifest.role,
+				name: resolved.manifest.name,
+				version: resolved.manifest.version
+			}
+		};
+
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify(output, null, 2)
+				}
+			]
+		};
+
+	} catch (error) {
+		throw new McpError(
+			ErrorCode.InternalError,
+			`Failed to resolve profile: ${error instanceof Error ? error.message : String(error)}`
 		);
 	}
 }
@@ -418,7 +480,7 @@ async function main() {
 	const server = createServer();
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
-	
+
 	// Log to stderr so it doesn't interfere with MCP protocol
 	console.error("MCP server started for lex-pr-runner");
 }

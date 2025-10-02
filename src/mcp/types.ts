@@ -8,16 +8,17 @@ import { z } from "zod";
  * Environment configuration for MCP server
  */
 export interface MCPEnvironment {
-	LEX_PROFILE_DIR: string;
+	LEX_PR_PROFILE_DIR?: string;
 	ALLOW_MUTATIONS: boolean;
 }
 
 /**
  * Get MCP environment configuration with defaults
+ * Supports LEX_PR_PROFILE_DIR for profile resolution precedence
  */
 export function getMCPEnvironment(): MCPEnvironment {
 	return {
-		LEX_PROFILE_DIR: process.env.LEX_PROFILE_DIR || ".smartergpt",
+		LEX_PR_PROFILE_DIR: process.env.LEX_PR_PROFILE_DIR,
 		ALLOW_MUTATIONS: process.env.ALLOW_MUTATIONS === "true"
 	};
 }
@@ -48,6 +49,11 @@ export const InitLocalArgs = z.object({
 	force: z.boolean().optional()
 });
 export type InitLocalArgs = z.infer<typeof InitLocalArgs>;
+
+export const ProfileResolveArgs = z.object({
+	profileDir: z.string().optional()
+});
+export type ProfileResolveArgs = z.infer<typeof ProfileResolveArgs>;
 
 /**
  * MCP tool result types
@@ -85,4 +91,14 @@ export interface InitLocalResult {
 		version?: string;
 	};
 	copiedFiles: string[];
+}
+
+export interface ProfileResolveResult {
+	path: string;
+	source: string;
+	manifest: {
+		role: string;
+		name?: string;
+		version?: string;
+	};
 }

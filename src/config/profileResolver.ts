@@ -21,18 +21,19 @@ export interface ProfileManifest {
  */
 export interface ResolvedProfile {
 	path: string; // Absolute path to profile directory
+	source: string; // Source of resolution (--profile-dir, LEX_PR_PROFILE_DIR, .smartergpt.local, .smartergpt)
 	manifest: ProfileManifest;
 }
 
 /**
  * Resolve profile directory with precedence chain
- * 
+ *
  * Precedence order:
  * 1. --profile-dir flag (passed as parameter)
  * 2. LEX_PR_PROFILE_DIR environment variable
  * 3. .smartergpt.local/ (local override, not tracked)
  * 4. .smartergpt/ (tracked example profile)
- * 
+ *
  * @param profileDirFlag - Profile directory from CLI flag (optional)
  * @param baseDir - Base directory to resolve relative paths (default: current working directory)
  * @returns Resolved profile with absolute path and manifest
@@ -101,6 +102,7 @@ export function resolveProfile(
 
 	return {
 		path: profilePath,
+		source,
 		manifest
 	};
 }
@@ -135,12 +137,12 @@ export class WriteProtectionError extends Error {
 
 /**
  * Validate if writes are allowed to a profile path
- * 
+ *
  * Write discipline rules:
  * - Profiles with role="example" are read-only (tracked example profiles)
  * - All writes must target local overlay or explicitly writable profiles
  * - .smartergpt/ is treated as role="example" if no manifest exists
- * 
+ *
  * @param profilePath - Absolute path to the profile directory
  * @param role - Profile role from manifest (defaults to "example" for .smartergpt/)
  * @returns true if writes are allowed, false otherwise
@@ -150,14 +152,14 @@ export function canWriteToProfile(profilePath: string, role: string): boolean {
 	if (role === "example") {
 		return false;
 	}
-	
+
 	// All other roles are writable
 	return true;
 }
 
 /**
  * Validate write operation and throw error if not allowed
- * 
+ *
  * @param profilePath - Absolute path to the profile directory
  * @param role - Profile role from manifest
  * @param operation - Description of the operation being attempted (for error message)

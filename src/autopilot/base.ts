@@ -92,7 +92,7 @@ export class AutopilotLevel0 extends AutopilotBase {
 
 		// Analyze gates
 		const totalGates = plan.items.reduce((sum, item) => sum + item.gates.length, 0);
-		const gateNames = plan.items.flatMap(item => 
+		const gateNames = plan.items.flatMap(item =>
 			item.gates.map(g => typeof g === 'string' ? g : g.name)
 		);
 		const uniqueGateNames = new Set(gateNames);

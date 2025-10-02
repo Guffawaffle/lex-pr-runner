@@ -76,7 +76,7 @@ describe('CLI autopilot command', () => {
 		expect(jsonStart).toBeGreaterThan(-1);
 		const jsonStr = output.substring(jsonStart);
 		const result = JSON.parse(jsonStr);
-		
+
 		expect(result.level).toBe(0);
 		expect(result.success).toBe(true);
 		expect(result.message).toContain('Level 0');
