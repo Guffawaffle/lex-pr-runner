@@ -98,11 +98,37 @@ Each gate result file must follow the JSON schema with stable keys:
 
 ## Configuration
 
-The planner reads configuration from `.smartergpt/` directory:
+### Profile Resolution
 
-- **`.smartergpt/stack.yml`**: Explicit plan with items, dependencies, and strategies (highest priority)
-- **`.smartergpt/scope.yml`**: Target branch and PR selection criteria (fallback)
-- **`.smartergpt/deps.yml`**: Dependency definitions (future use)
+The runner uses a **precedence chain** to locate the profile directory:
+
+1. `--profile-dir <path>` - Explicit CLI override
+2. `LEX_PR_PROFILE_DIR` - Environment variable
+3. `.smartergpt.local/` - Local overlay (development, not tracked)
+4. `.smartergpt/` - Tracked example profile (default)
+
+**Quick start:**
+```bash
+# Initialize local overlay for development
+npm run cli -- init-local
+
+# Runner automatically uses .smartergpt.local/
+npm run cli -- plan
+
+# Or use explicit override
+npm run cli -- plan --profile-dir /custom/path
+```
+
+See [docs/profile-resolution.md](docs/profile-resolution.md) for complete documentation, migration guide, and examples.
+
+### Configuration Files
+
+The planner reads configuration from the resolved profile directory:
+
+- **`stack.yml`**: Explicit plan with items, dependencies, and strategies (highest priority)
+- **`scope.yml`**: Target branch and PR selection criteria (fallback)
+- **`deps.yml`**: Dependency definitions (future use)
+- **`profile.yml`**: Profile metadata and role (`example`, `development`, `local`)
 
 ### Example stack.yml
 ```yaml
