@@ -268,7 +268,7 @@ program
 			const profile = resolveProfile(opts.profileDir);
 
 			// Import autopilot modules
-			const { AutopilotLevel0, AutopilotLevel1 } = await import("./autopilot/index.js");
+			const { AutopilotLevel0, AutopilotLevel1, AutopilotLevel2 } = await import("./autopilot/index.js");
 
 			// Create autopilot context
 			const context = {
@@ -285,8 +285,10 @@ program
 				autopilot = new AutopilotLevel0(context);
 			} else if (level === 1) {
 				autopilot = new AutopilotLevel1(context);
+			} else if (level === 2) {
+				autopilot = new AutopilotLevel2(context);
 			} else {
-				console.error(`Error: unsupported autopilot level ${level} (supported: 0, 1)`);
+				console.error(`Error: unsupported autopilot level ${level} (supported: 0, 1, 2)`);
 				process.exit(1);
 			}
 
