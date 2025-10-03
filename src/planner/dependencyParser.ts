@@ -159,11 +159,11 @@ function extractDependencies(description: string, options: ParserOptions): strin
 		dependencies.push(...deps);
 	}
 
-	// Pattern 4: GitHub linking keywords (Closes, Fixes, Resolves)
-	const githubLinkRegex = /(?:Closes|Fixes|Resolves):\s*#(\d+)/gi;
+	// Pattern 4: GitHub linking keywords (Closes, Fixes, Resolves) - can have comma-separated list
+	const githubLinkRegex = /(?:Closes|Fixes|Resolves):\s*([^\r\n]+)/gi;
 	for (const match of description.matchAll(githubLinkRegex)) {
-		const prNumber = match[1];
-		dependencies.push(`#${prNumber}`);
+		const deps = parseDependencyLine(match[1], options);
+		dependencies.push(...deps);
 	}
 
 	return dependencies;
