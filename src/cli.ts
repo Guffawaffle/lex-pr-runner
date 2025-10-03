@@ -18,6 +18,7 @@ import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvir
 import { initLocalOverlay, hasLocalOverlay } from "./config/localOverlay.js";
 import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
 import { parseAutopilotConfig, AutopilotConfigError, getAutopilotLevelDescription, AutopilotLevel } from "./autopilot/index.js";
+import { createLogger, Logger, generateCorrelationId } from "./monitoring/index.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -39,8 +40,23 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
   process.exit(1); // Unexpected failures
 }
 
+// Global logger instance
+let logger: Logger;
+
 const program = new Command();
-program.name("lex-pr").description("Lex-PR Runner CLI - TypeScript Implementation").version("0.1.0");
+program
+	.name("lex-pr")
+	.description("Lex-PR Runner CLI - TypeScript Implementation")
+	.version("0.1.0")
+	.option("--log-format <format>", "Log output format: 'json' or 'human'", process.env.LOG_FORMAT || 'human')
+	.hook('preAction', (thisCommand) => {
+		// Initialize logger based on global option
+		const opts = thisCommand.opts();
+		logger = createLogger({ 
+			format: opts.logFormat as 'json' | 'human',
+			correlationId: generateCorrelationId()
+		});
+	});
 
 // Schema validation command
 program
