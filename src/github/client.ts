@@ -25,6 +25,10 @@ export interface GitHubClient {
 	getPRDetails(number: number): Promise<PullRequestDetails>;
 	getPRDependencies(pr: PullRequest): Promise<string[]>;
 	validateRepository(): Promise<RepositoryInfo>;
+	// File analysis support
+	getOctokit(): any; // Returns Octokit instance for advanced operations
+	getOwner(): string;
+	getRepo(): string;
 }
 
 export class GitHubClientImpl implements GitHubClient {
@@ -266,6 +270,19 @@ export class GitHubClientImpl implements GitHubClient {
 			throw new GitHubRateLimitError("GitHub API rate limit exceeded", resetTime);
 		}
 		throw new GitHubAPIError(`GitHub API error: ${error.message}`, error.status);
+	}
+
+	// File analysis support methods
+	getOctokit(): any {
+		return this.octokit;
+	}
+
+	getOwner(): string {
+		return this.owner;
+	}
+
+	getRepo(): string {
+		return this.repo;
 	}
 }
 

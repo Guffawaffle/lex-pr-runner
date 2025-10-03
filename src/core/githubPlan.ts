@@ -6,6 +6,7 @@
 import { Plan, PlanItem, Gate } from "../schema.js";
 import { GitHubClient, PullRequestDetails } from "../github/index.js";
 import { stableSort } from "../util/canonicalJson.js";
+import { createFileAnalyzer, FileAnalysisResult } from "../planner/index.js";
 
 export interface GitHubPlanOptions {
 	query?: string; // GitHub search query
@@ -225,4 +226,26 @@ function validateGitHubDependencies(planItems: PlanItem[], prDetails: PullReques
 			}
 		}
 	}
+}
+
+/**
+ * Analyze file changes across PRs to detect potential conflicts and dependencies
+ */
+export async function analyzeGitHubPRFiles(
+	client: GitHubClient,
+	prs: PullRequestDetails[]
+): Promise<FileAnalysisResult> {
+	const octokit = client.getOctokit();
+	const owner = client.getOwner();
+	const repo = client.getRepo();
+
+	const analyzer = createFileAnalyzer(octokit, owner, repo);
+
+	const prInfo = prs.map(pr => ({
+		number: pr.number,
+		name: `PR-${pr.number}`,
+		sha: pr.head.sha
+	}));
+
+	return await analyzer.analyzeFiles(prInfo);
 }
