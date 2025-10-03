@@ -33,10 +33,27 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
     process.exit(2);
   }
   if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError || e instanceof WriteProtectionError || e instanceof AutopilotConfigError) {
-    console.error(String(err?.message ?? e));
+    console.error(`\n❌ Error: ${String(err?.message ?? e)}\n`);
+    
+    // Add helpful suggestions based on error type
+    if (e instanceof WriteProtectionError) {
+      console.error("💡 Tip: Use a local profile directory for development:");
+      console.error("   lex-pr init --profile-dir .smartergpt.local\n");
+    } else if (e instanceof CycleError) {
+      console.error("💡 Tip: Check your dependency declarations in PR descriptions");
+      console.error("   Look for circular dependencies like: A→B→C→A\n");
+    } else if (e instanceof UnknownDependencyError) {
+      console.error("💡 Tip: Ensure all referenced PRs exist and are included in your plan");
+      console.error("   Run 'lex-pr discover' to find available PRs\n");
+    } else if (e instanceof SchemaValidationError) {
+      console.error("💡 Tip: Validate your configuration files:");
+      console.error("   lex-pr schema validate plan.json\n");
+    }
+    
     process.exit(2); // Validation errors
   }
-  console.error(String(err?.message ?? e));
+  console.error(`\n❌ Unexpected error: ${String(err?.message ?? e)}\n`);
+  console.error("💡 Tip: Run 'lex-pr doctor' to check your environment\n");
   process.exit(1); // Unexpected failures
 }
 
@@ -78,7 +95,11 @@ program
 			.action((file: string | undefined, opts) => {
 				const planFile = opts.plan || file;
 				if (!planFile) {
-					console.error("Error: plan file is required (use --plan <file> or provide as argument)");
+					console.error("\n❌ Error: Plan file is required\n");
+					console.error("Usage:");
+					console.error("  lex-pr schema validate plan.json");
+					console.error("  lex-pr schema validate --plan plan.json\n");
+					console.error("💡 Tip: Generate a plan first with 'lex-pr plan --from-github'\n");
 					process.exit(1);
 				}
 
@@ -597,8 +618,14 @@ program
 			}
 
 			if (!githubAPI) {
-				console.error("Error: Could not detect GitHub repository.");
-				console.error("Please specify --owner and --repo options or run from a GitHub repository.");
+				console.error("\n❌ Error: Could not detect GitHub repository\n");
+				console.error("Solutions:");
+				console.error("  1. Run from a Git repository with GitHub remote:");
+				console.error("     git remote -v");
+				console.error("\n  2. Specify repository explicitly:");
+				console.error("     lex-pr discover --owner <owner> --repo <repo>\n");
+				console.error("💡 Tip: Initialize your workspace first:");
+				console.error("   lex-pr init\n");
 				process.exit(1);
 			}
 
