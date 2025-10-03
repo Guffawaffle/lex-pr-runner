@@ -18,6 +18,7 @@ import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvir
 import { initLocalOverlay, hasLocalOverlay } from "./config/localOverlay.js";
 import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
 import { parseAutopilotConfig, AutopilotConfigError, getAutopilotLevelDescription, AutopilotLevel } from "./autopilot/index.js";
+import { runInit } from "./commands/init.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -40,7 +41,29 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
 }
 
 const program = new Command();
-program.name("lex-pr").description("Lex-PR Runner CLI - TypeScript Implementation").version("0.1.0");
+program
+	.name("lex-pr")
+	.description("Lex-PR Runner - Fan-out PRs, compute merge pyramid, run gates, and weave merges cleanly")
+	.version("0.1.0")
+	.addHelpText('after', `
+Examples:
+  $ lex-pr init                          Initialize workspace with interactive setup
+  $ lex-pr doctor                        Validate environment and configuration
+  $ lex-pr discover                      Find open PRs matching scope
+  $ lex-pr plan --from-github            Generate merge plan from GitHub PRs
+  $ lex-pr execute plan.json             Run quality gates on plan
+  $ lex-pr merge plan.json --dry-run     Preview merge operations
+
+Quick Start:
+  1. Initialize:  lex-pr init
+  2. Validate:    lex-pr doctor
+  3. Discover:    lex-pr discover
+  4. Plan:        lex-pr plan --from-github
+  5. Execute:     lex-pr execute plan.json
+  6. Merge:       lex-pr merge plan.json
+
+Documentation: https://github.com/Guffawaffle/lex-pr-runner/blob/main/docs/quickstart.md
+`);
 
 // Schema validation command
 program
@@ -1134,6 +1157,39 @@ async function performDoctorChecks(): Promise<any> {
 
 	return checks;
 }
+
+// Init command - Interactive workspace setup
+program
+	.command("init")
+	.description("Initialize lex-pr-runner workspace with interactive setup wizard")
+	.option("--force", "Overwrite existing configuration files")
+	.option("--non-interactive", "Run without prompts (use environment variables)")
+	.option("--github-token <token>", "GitHub token for authentication")
+	.option("--profile-dir <dir>", "Profile directory (default: .smartergpt.local)")
+	.action(async (opts) => {
+		try {
+			const result = await runInit({
+				force: opts.force,
+				nonInteractive: opts.nonInteractive,
+				githubToken: opts.githubToken,
+				profileDir: opts.profileDir
+			});
+
+			if (!result.success) {
+				console.error(`\n❌ ${result.message}\n`);
+				process.exit(1);
+			}
+
+			process.exit(0);
+		} catch (error) {
+			if (error instanceof WriteProtectionError) {
+				console.error(`\n❌ ${error.message}\n`);
+				process.exit(2);
+			}
+			console.error(`\n❌ Initialization failed: ${error instanceof Error ? error.message : String(error)}\n`);
+			process.exit(1);
+		}
+	});
 
 // Bootstrap command
 program

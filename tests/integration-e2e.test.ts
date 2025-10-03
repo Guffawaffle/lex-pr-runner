@@ -34,11 +34,12 @@ describe('End-to-End Integration Tests', () => {
     it('should show help for main CLI', async () => {
       const { stdout, stderr } = await runCLI('--help');
 
-      expect(stdout).toContain('Lex-PR Runner CLI');
+      expect(stdout).toContain('Lex-PR Runner');
       expect(stdout).toContain('discover');
       expect(stdout).toContain('merge');
       expect(stdout).toContain('bootstrap');
       expect(stdout).toContain('doctor');
+      expect(stdout).toContain('init');
       expect(stderr).toBe('');
     });
 
