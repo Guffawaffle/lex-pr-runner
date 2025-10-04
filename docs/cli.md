@@ -33,6 +33,96 @@ Configuration values are resolved in the following order (highest to lowest prio
 
 ## Commands
 
+### `init`
+
+Initialize lex-pr-runner workspace with interactive setup wizard.
+
+```bash
+lex-pr init [options]
+
+Options:
+  --force                 Overwrite existing configuration files
+  --non-interactive       Run without prompts (use environment variables)
+  --github-token <token>  GitHub token for authentication
+  --profile-dir <dir>     Profile directory (default: .smartergpt.local)
+  -h, --help              Display help for command
+```
+
+#### What Gets Created
+
+The init command creates a complete workspace configuration:
+
+```
+.smartergpt.local/
+├── profile.yml              # Profile metadata (role: local)
+├── intent.md                # Project goals and scope
+├── scope.yml                # PR discovery rules
+├── deps.yml                 # Dependency relationships
+├── gates.yml                # Quality gates configuration
+└── pull-request-template.md # PR template with dependency syntax
+```
+
+#### Interactive Setup
+
+When run without `--non-interactive`, the wizard will:
+
+1. Detect project type (Node.js, Python, Rust, Go, etc.)
+2. Prompt for GitHub token (optional)
+3. Validate repository access if token provided
+4. Create workspace configuration files
+5. Display next steps
+
+#### Examples
+
+```bash
+# Interactive setup with prompts
+lex-pr init
+
+# Non-interactive setup (use environment variables)
+export GITHUB_TOKEN=your_token_here
+lex-pr init --non-interactive
+
+# Force overwrite existing configuration
+lex-pr init --force
+
+# Use custom profile directory
+lex-pr init --profile-dir .smartergpt.custom
+
+# Provide GitHub token via CLI
+lex-pr init --github-token ghp_your_token_here
+```
+
+#### Environment Variables
+
+| Variable | Description | Used When |
+|----------|-------------|-----------|
+| `GITHUB_TOKEN` | GitHub personal access token | Token authentication |
+| `GH_TOKEN` | Alternative GitHub token | Token authentication |
+
+#### Exit Codes
+
+- `0`: Initialization successful
+- `1`: Initialization failed (general error)
+- `2`: Write protection error (tried to write to read-only profile)
+
+#### Profile Directory Selection
+
+The init command automatically selects the appropriate profile directory:
+
+1. If `--profile-dir` is specified, uses that directory
+2. If `.smartergpt` exists (tracked example), uses `.smartergpt.local`
+3. Otherwise, uses `.smartergpt.local` for new setups
+
+This ensures local development work doesn't overwrite tracked example configurations.
+
+#### See Also
+
+- [Quickstart Guide](./quickstart.md) - Complete onboarding workflow
+- [Profile Resolution](./profile-resolution.md) - Understanding profile directories
+- `lex-pr doctor` - Validate environment after initialization
+
+---
+
 ### `schema validate`
 
 Validate plan.json files against the schema.
