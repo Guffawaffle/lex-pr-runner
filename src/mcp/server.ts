@@ -23,6 +23,7 @@ import { ExecutionState } from "../executionState.js";
 import { MergeEligibilityEvaluator } from "../mergeEligibility.js";
 import { loadPlan, validatePlan } from "../schema.js";
 import { initLocalOverlay } from "../config/localOverlay.js";
+import { healthChecker } from "../monitoring/health.js";
 import {
 	getMCPEnvironment,
 	PlanCreateArgs,
@@ -141,6 +142,20 @@ function createServer(): Server {
 						},
 					},
 				},
+				{
+					name: "health",
+					description: "Get health status of the system with optional metrics",
+					inputSchema: {
+						type: "object",
+						properties: {
+							includeMetrics: {
+								type: "boolean",
+								description: "Include detailed metrics in response",
+								default: false,
+							},
+						},
+					},
+				},
 			],
 		};
 	});
@@ -164,6 +179,9 @@ function createServer(): Server {
 
 			case "profile.resolve":
 				return await handleProfileResolve(args as ProfileResolveArgs);
+
+			case "health":
+				return await handleHealth(args as { includeMetrics?: boolean });
 
 			default:
 				throw new McpError(
@@ -471,6 +489,22 @@ async function handleProfileResolve(args: ProfileResolveArgs): Promise<{ content
 			`Failed to resolve profile: ${error instanceof Error ? error.message : String(error)}`
 		);
 	}
+}
+
+/**
+ * Handle health check
+ */
+async function handleHealth(args: { includeMetrics?: boolean }): Promise<{ content: [{ type: "text", text: string }] }> {
+	const health = healthChecker.getHealth(args.includeMetrics || false);
+	
+	return {
+		content: [
+			{
+				type: "text",
+				text: JSON.stringify(health, null, 2)
+			}
+		]
+	};
 }
 
 /**

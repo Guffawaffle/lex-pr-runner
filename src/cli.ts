@@ -18,6 +18,8 @@ import { bootstrapWorkspace, createMinimalWorkspace, detectProjectType, getEnvir
 import { initLocalOverlay, hasLocalOverlay } from "./config/localOverlay.js";
 import { WriteProtectionError, resolveProfile, validateWriteOperation } from "./config/profileResolver.js";
 import { parseAutopilotConfig, AutopilotConfigError, getAutopilotLevelDescription, AutopilotLevel } from "./autopilot/index.js";
+import { createLogger, Logger, generateCorrelationId } from "./monitoring/index.js";
+import { runInit } from "./commands/init.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -32,15 +34,66 @@ function exitWith(e: unknown, schemaCode = "ESCHEMA") {
     process.exit(2);
   }
   if (e instanceof SchemaValidationError || e instanceof CycleError || e instanceof UnknownDependencyError || e instanceof WriteProtectionError || e instanceof AutopilotConfigError) {
-    console.error(String(err?.message ?? e));
+    console.error(`\n❌ Error: ${String(err?.message ?? e)}\n`);
+
+    // Add helpful suggestions based on error type
+    if (e instanceof WriteProtectionError) {
+      console.error("💡 Tip: Use a local profile directory for development:");
+      console.error("   lex-pr init --profile-dir .smartergpt.local\n");
+    } else if (e instanceof CycleError) {
+      console.error("💡 Tip: Check your dependency declarations in PR descriptions");
+      console.error("   Look for circular dependencies like: A→B→C→A\n");
+    } else if (e instanceof UnknownDependencyError) {
+      console.error("💡 Tip: Ensure all referenced PRs exist and are included in your plan");
+      console.error("   Run 'lex-pr discover' to find available PRs\n");
+    } else if (e instanceof SchemaValidationError) {
+      console.error("💡 Tip: Validate your configuration files:");
+      console.error("   lex-pr schema validate plan.json\n");
+    }
+
     process.exit(2); // Validation errors
   }
-  console.error(String(err?.message ?? e));
+  console.error(`\n❌ Unexpected error: ${String(err?.message ?? e)}\n`);
+  console.error("💡 Tip: Run 'lex-pr doctor' to check your environment\n");
   process.exit(1); // Unexpected failures
 }
 
+// Global logger instance
+let logger: Logger;
+
 const program = new Command();
-program.name("lex-pr").description("Lex-PR Runner CLI - TypeScript Implementation").version("0.1.0");
+program
+	.name("lex-pr")
+	.description("Lex-PR Runner - Fan-out PRs, compute merge pyramid, run gates, and weave merges cleanly")
+	.version("0.1.0")
+	.option("--log-format <format>", "Log output format: 'json' or 'human'", process.env.LOG_FORMAT || 'human')
+	.addHelpText('after', `
+Examples:
+  $ lex-pr init                          Initialize workspace with interactive setup
+  $ lex-pr doctor                        Validate environment and configuration
+  $ lex-pr discover                      Find open PRs matching scope
+  $ lex-pr plan --from-github            Generate merge plan from GitHub PRs
+  $ lex-pr execute plan.json             Run quality gates on plan
+  $ lex-pr merge plan.json --dry-run     Preview merge operations
+
+Quick Start:
+  1. Initialize:  lex-pr init
+  2. Validate:    lex-pr doctor
+  3. Discover:    lex-pr discover
+  4. Plan:        lex-pr plan --from-github
+  5. Execute:     lex-pr execute plan.json
+  6. Merge:       lex-pr merge plan.json
+
+Documentation: https://github.com/Guffawaffle/lex-pr-runner/blob/main/docs/quickstart.md
+`)
+	.hook('preAction', (thisCommand) => {
+		// Initialize logger based on global option
+		const opts = thisCommand.opts();
+		logger = createLogger({
+			format: opts.logFormat as 'json' | 'human',
+			correlationId: generateCorrelationId()
+		});
+	});
 
 // Schema validation command
 program
@@ -55,7 +108,11 @@ program
 			.action((file: string | undefined, opts) => {
 				const planFile = opts.plan || file;
 				if (!planFile) {
-					console.error("Error: plan file is required (use --plan <file> or provide as argument)");
+					console.error("\n❌ Error: Plan file is required\n");
+					console.error("Usage:");
+					console.error("  lex-pr schema validate plan.json");
+					console.error("  lex-pr schema validate --plan plan.json\n");
+					console.error("💡 Tip: Generate a plan first with 'lex-pr plan --from-github'\n");
 					process.exit(1);
 				}
 
@@ -574,8 +631,14 @@ program
 			}
 
 			if (!githubAPI) {
-				console.error("Error: Could not detect GitHub repository.");
-				console.error("Please specify --owner and --repo options or run from a GitHub repository.");
+				console.error("\n❌ Error: Could not detect GitHub repository\n");
+				console.error("Solutions:");
+				console.error("  1. Run from a Git repository with GitHub remote:");
+				console.error("     git remote -v");
+				console.error("\n  2. Specify repository explicitly:");
+				console.error("     lex-pr discover --owner <owner> --repo <repo>\n");
+				console.error("💡 Tip: Initialize your workspace first:");
+				console.error("   lex-pr init\n");
 				process.exit(1);
 			}
 
@@ -1134,6 +1197,39 @@ async function performDoctorChecks(): Promise<any> {
 
 	return checks;
 }
+
+// Init command - Interactive workspace setup
+program
+	.command("init")
+	.description("Initialize lex-pr-runner workspace with interactive setup wizard")
+	.option("--force", "Overwrite existing configuration files")
+	.option("--non-interactive", "Run without prompts (use environment variables)")
+	.option("--github-token <token>", "GitHub token for authentication")
+	.option("--profile-dir <dir>", "Profile directory (default: .smartergpt.local)")
+	.action(async (opts) => {
+		try {
+			const result = await runInit({
+				force: opts.force,
+				nonInteractive: opts.nonInteractive,
+				githubToken: opts.githubToken,
+				profileDir: opts.profileDir
+			});
+
+			if (!result.success) {
+				console.error(`\n❌ ${result.message}\n`);
+				process.exit(1);
+			}
+
+			process.exit(0);
+		} catch (error) {
+			if (error instanceof WriteProtectionError) {
+				console.error(`\n❌ ${error.message}\n`);
+				process.exit(2);
+			}
+			console.error(`\n❌ Initialization failed: ${error instanceof Error ? error.message : String(error)}\n`);
+			process.exit(1);
+		}
+	});
 
 // Bootstrap command
 program

@@ -16,6 +16,7 @@ import {
 	GitHubRateLimitError,
 	GitHubAuthError
 } from "./types.js";
+import { parsePRDescription, normalizeDependencyRef } from "../planner/index.js";
 
 export type { PullRequest, PullRequestDetails, PRQueryOptions, RepositoryInfo };
 export { GitHubAPIError, GitHubRateLimitError, GitHubAuthError };
@@ -25,6 +26,10 @@ export interface GitHubClient {
 	getPRDetails(number: number): Promise<PullRequestDetails>;
 	getPRDependencies(pr: PullRequest): Promise<string[]>;
 	validateRepository(): Promise<RepositoryInfo>;
+	// File analysis support
+	getOctokit(): any; // Returns Octokit instance for advanced operations
+	getOwner(): string;
+	getRepo(): string;
 }
 
 export class GitHubClientImpl implements GitHubClient {
@@ -137,11 +142,19 @@ export class GitHubClientImpl implements GitHubClient {
 			const tags = this.extractTags(pr);
 			const requiredGates = this.extractRequiredGates(pr);
 
+			// Parse PR description for additional metadata and gate overrides
+			const parsed = parsePRDescription(pr.number, pr.body, {
+				repository: `${this.owner}/${this.repo}`,
+				partialExtraction: true
+			});
+
 			return {
 				...pr,
 				dependencies,
 				tags,
-				requiredGates
+				requiredGates,
+				...(parsed.metadata && Object.keys(parsed.metadata).length > 0 ? { metadata: parsed.metadata } : {}),
+				...(parsed.gates ? { gateOverrides: parsed.gates } : {})
 			};
 		} catch (error: any) {
 			return this.handleAPIError(error);
@@ -153,44 +166,19 @@ export class GitHubClientImpl implements GitHubClient {
 			return [];
 		}
 
-		const dependencies: string[] = [];
+		// Use the new dependency parser for comprehensive parsing
+		const parsed = parsePRDescription(pr.number, pr.body, {
+			repository: `${this.owner}/${this.repo}`,
+			partialExtraction: true
+		});
 
-		// Parse "Depends-on:" footers using regex
-		// Matches patterns like:
-		// - "Depends-on: #123"
-		// - "Depends-on: user/repo#456"
-		// - "Depends-on: #123, #456"
-		const dependsOnRegex = /Depends-on:\s*([^\r\n]+)/gi;
-		const matches = pr.body.matchAll(dependsOnRegex);
-
-		for (const match of matches) {
-			const dependencyStr = match[1].trim();
-
-			// Split by comma and process each dependency
-			const deps = dependencyStr.split(',').map(dep => dep.trim());
-
-			for (const dep of deps) {
-				// Parse different dependency formats
-				if (dep.startsWith('#')) {
-					// Simple "#123" format - same repository
-					const prNumber = dep.substring(1);
-					if (/^\d+$/.test(prNumber)) {
-						dependencies.push(`${this.owner}/${this.repo}#${prNumber}`);
-					}
-				} else if (dep.includes('#')) {
-					// "owner/repo#123" format
-					const [repoPath, prNumber] = dep.split('#');
-					if (repoPath && prNumber && /^\d+$/.test(prNumber)) {
-						// If no owner specified, assume current owner
-						const fullRepoPath = repoPath.includes('/') ? repoPath : `${this.owner}/${repoPath}`;
-						dependencies.push(`${fullRepoPath}#${prNumber}`);
-					}
-				}
-			}
-		}
+		// Normalize all dependencies to full format (owner/repo#123)
+		const normalizedDeps = parsed.dependencies.map(dep => 
+			normalizeDependencyRef(dep, `${this.owner}/${this.repo}`)
+		);
 
 		// Remove duplicates and sort for deterministic output
-		return [...new Set(dependencies)].sort();
+		return [...new Set(normalizedDeps)].sort();
 	}
 
 	private transformPR(prData: any): PullRequest {
@@ -242,15 +230,11 @@ export class GitHubClientImpl implements GitHubClient {
 
 		gates.push(...gateLabels);
 
-		// Extract from PR body using "Required-gates:" footer
+		// Use the dependency parser to extract gate overrides from PR body
 		if (pr.body) {
-			const requiredGatesRegex = /Required-gates:\s*([^\r\n]+)/gi;
-			const matches = pr.body.matchAll(requiredGatesRegex);
-
-			for (const match of matches) {
-				const gatesStr = match[1].trim();
-				const bodyGates = gatesStr.split(',').map(gate => gate.trim());
-				gates.push(...bodyGates);
+			const parsed = parsePRDescription(pr.number, pr.body, { partialExtraction: true });
+			if (parsed.gates?.required) {
+				gates.push(...parsed.gates.required);
 			}
 		}
 
@@ -266,6 +250,19 @@ export class GitHubClientImpl implements GitHubClient {
 			throw new GitHubRateLimitError("GitHub API rate limit exceeded", resetTime);
 		}
 		throw new GitHubAPIError(`GitHub API error: ${error.message}`, error.status);
+	}
+
+	// File analysis support methods
+	getOctokit(): any {
+		return this.octokit;
+	}
+
+	getOwner(): string {
+		return this.owner;
+	}
+
+	getRepo(): string {
+		return this.repo;
 	}
 }
 

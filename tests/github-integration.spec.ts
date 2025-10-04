@@ -16,7 +16,8 @@ const mockOctokit = {
 		},
 		pulls: {
 			list: vi.fn(),
-			get: vi.fn()
+			get: vi.fn(),
+			listFiles: vi.fn()
 		}
 	}
 };
@@ -348,6 +349,108 @@ describe("GitHub Integration", () => {
 			});
 
 			expect(plan.items).toHaveLength(0);
+		});
+	});
+
+	describe("GitHub Plan with File Analysis", () => {
+		it("should analyze file changes for GitHub PRs", async () => {
+			// Reset and setup mock
+			vi.resetAllMocks();
+			
+			const localMockOctokit = {
+				rest: {
+					pulls: {
+						listFiles: vi.fn()
+					}
+				}
+			};
+
+			// Mock file changes implementation
+			localMockOctokit.rest.pulls.listFiles.mockImplementation(async ({ pull_number }: any) => {
+				if (pull_number === 201) {
+					return {
+						data: [
+							{
+								filename: "src/shared.ts",
+								status: "modified",
+								additions: 20,
+								deletions: 10,
+								changes: 30
+							}
+						]
+					};
+				} else if (pull_number === 202) {
+					return {
+						data: [
+							{
+								filename: "src/shared.ts",
+								status: "modified",
+								additions: 15,
+								deletions: 8,
+								changes: 23
+							}
+						]
+					};
+				}
+				return { data: [] };
+			});
+
+			// Mock client with required methods
+			const mockClient = {
+				listOpenPRs: vi.fn(),
+				getPRDetails: vi.fn(),
+				getPRDependencies: vi.fn(),
+				validateRepository: vi.fn(),
+				getOctokit: vi.fn(() => localMockOctokit),
+				getOwner: vi.fn(() => "testowner"),
+				getRepo: vi.fn(() => "testrepo")
+			};
+
+			// Mock PR details
+			const pr1: PullRequestDetails = {
+				number: 201,
+				title: "Feature A",
+				body: "Implements feature A",
+				head: { ref: "feature-a", sha: "sha201" },
+				base: { ref: "main", sha: "main-sha" },
+				state: "open",
+				labels: [],
+				draft: false,
+				mergeable: true,
+				user: { login: "dev1" },
+				createdAt: "2023-01-01T00:00:00Z",
+				updatedAt: "2023-01-02T00:00:00Z",
+				dependencies: [],
+				tags: [],
+				requiredGates: []
+			};
+
+			const pr2: PullRequestDetails = {
+				number: 202,
+				title: "Feature B",
+				body: "Implements feature B",
+				head: { ref: "feature-b", sha: "sha202" },
+				base: { ref: "main", sha: "main-sha" },
+				state: "open",
+				labels: [],
+				draft: false,
+				mergeable: true,
+				user: { login: "dev2" },
+				createdAt: "2023-01-03T00:00:00Z",
+				updatedAt: "2023-01-04T00:00:00Z",
+				dependencies: [],
+				tags: [],
+				requiredGates: []
+			};
+
+			const { analyzeGitHubPRFiles } = await import("../src/core/githubPlan.js");
+			const analysis = await analyzeGitHubPRFiles(mockClient as any, [pr1, pr2]);
+
+			expect(analysis.fileIntersections).toHaveLength(1);
+			expect(analysis.fileIntersections[0].prs).toEqual(["PR-201", "PR-202"]);
+			expect(analysis.fileIntersections[0].files).toEqual(["src/shared.ts"]);
+			expect(analysis.suggestions).toHaveLength(1);
+			expect(analysis.conflicts).toHaveLength(1);
 		});
 	});
 });

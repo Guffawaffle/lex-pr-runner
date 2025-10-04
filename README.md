@@ -21,6 +21,36 @@ See [`docs/TERMS.md`](docs/TERMS.md) for complete canonical terms and separation
 Use `npm run cli -- doctor` to verify your environment meets all requirements.
 
 ## Quick start
+
+### For New Users
+
+```bash
+# 1. Install globally or in your project
+npm install -g lex-pr-runner
+
+# 2. Initialize workspace (interactive)
+lex-pr init
+
+# 3. Verify environment
+lex-pr doctor
+
+# 4. Discover PRs
+lex-pr discover
+
+# 5. Generate plan
+lex-pr plan --from-github
+
+# 6. Execute gates
+lex-pr execute plan.json
+
+# 7. Merge PRs
+lex-pr merge plan.json
+```
+
+See [docs/quickstart.md](docs/quickstart.md) for a complete 5-minute onboarding guide.
+
+### For Development
+
 ```bash
 # install dependencies
 npm install

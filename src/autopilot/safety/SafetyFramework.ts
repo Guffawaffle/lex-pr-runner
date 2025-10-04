@@ -12,12 +12,62 @@
 import * as readline from 'readline';
 import { GitHubAPI } from '../../github/api.js';
 
+/**
+ * Risk levels for operations
+ */
+export enum RiskLevel {
+	/** Low risk: read-only operations, status checks */
+	Low = 'low',
+	/** Medium risk: single PR operations, branch creation */
+	Medium = 'medium',
+	/** High risk: multi-PR integration, destructive operations */
+	High = 'high'
+}
+
+/**
+ * Confirmation modes for safety framework
+ */
+export enum ConfirmationMode {
+	/** Interactive: prompt user in TTY */
+	Interactive = 'interactive',
+	/** Automatic: auto-confirm all operations */
+	Automatic = 'automatic',
+	/** Dry-run: simulate without executing */
+	DryRun = 'dry-run'
+}
+
+/**
+ * Safety policy configuration
+ */
+export interface SafetyPolicy {
+	/** Require confirmation for operations at or above this risk level */
+	confirmationThreshold: RiskLevel;
+	/** Confirmation mode to use */
+	confirmationMode: ConfirmationMode;
+	/** Timeout for confirmation prompts in seconds (0 = no timeout) */
+	promptTimeout: number;
+	/** Default action when timeout occurs ('abort' or 'proceed') */
+	timeoutAction: 'abort' | 'proceed';
+}
+
+/**
+ * Default safety policy (most restrictive)
+ */
+export const DEFAULT_SAFETY_POLICY: SafetyPolicy = {
+	confirmationThreshold: RiskLevel.Medium,
+	confirmationMode: ConfirmationMode.Interactive,
+	promptTimeout: 30,
+	timeoutAction: 'abort'
+};
+
 export interface MergeOperation {
 	type: 'merge' | 'push' | 'create-branch' | 'open-pr' | 'add-comment';
 	description: string;
 	prNumber?: number;
 	branch?: string;
 	target?: string;
+	/** Risk level for this operation */
+	riskLevel?: RiskLevel;
 }
 
 export interface OperationSummary {
@@ -25,6 +75,8 @@ export interface OperationSummary {
 	mergeOperations: MergeOperation[];
 	prOperations: MergeOperation[];
 	affectedPRs: number[];
+	/** Overall risk level for the operation set */
+	riskLevel?: RiskLevel;
 }
 
 export interface ContainmentCheck {
@@ -56,9 +108,31 @@ export class SafetyFramework {
 	private abortRequested = false;
 	private signalHandlersInstalled = false;
 	private githubAPI?: GitHubAPI;
+	private policy: SafetyPolicy;
 
-	constructor(githubAPI?: GitHubAPI) {
+	constructor(githubAPI?: GitHubAPI, policy?: Partial<SafetyPolicy>) {
 		this.githubAPI = githubAPI;
+		this.policy = {
+			...DEFAULT_SAFETY_POLICY,
+			...policy
+		};
+	}
+
+	/**
+	 * Get current safety policy
+	 */
+	getPolicy(): SafetyPolicy {
+		return { ...this.policy };
+	}
+
+	/**
+	 * Update safety policy
+	 */
+	updatePolicy(policy: Partial<SafetyPolicy>): void {
+		this.policy = {
+			...this.policy,
+			...policy
+		};
 	}
 
 	/**
@@ -66,6 +140,75 @@ export class SafetyFramework {
 	 */
 	private isTTY(): boolean {
 		return process.stdin.isTTY === true && process.stdout.isTTY === true;
+	}
+
+	/**
+	 * Assess risk level for an operation
+	 */
+	assessRiskLevel(operation: MergeOperation): RiskLevel {
+		// If risk level is already set, use it
+		if (operation.riskLevel) {
+			return operation.riskLevel;
+		}
+
+		// Assess based on operation type
+		switch (operation.type) {
+			case 'add-comment':
+				return RiskLevel.Low;
+			
+			case 'create-branch':
+			case 'open-pr':
+				return RiskLevel.Medium;
+			
+			case 'merge':
+			case 'push':
+				return RiskLevel.High;
+			
+			default:
+				return RiskLevel.Medium;
+		}
+	}
+
+	/**
+	 * Assess overall risk level for operation summary
+	 */
+	assessOperationRisk(summary: OperationSummary): RiskLevel {
+		// If overall risk is already set, use it
+		if (summary.riskLevel) {
+			return summary.riskLevel;
+		}
+
+		const allOps = [...summary.mergeOperations, ...summary.prOperations];
+		
+		// Empty operations are low risk
+		if (allOps.length === 0) {
+			return RiskLevel.Low;
+		}
+
+		// Find highest risk level
+		const risks = allOps.map(op => this.assessRiskLevel(op));
+		
+		if (risks.some(r => r === RiskLevel.High)) {
+			return RiskLevel.High;
+		}
+		if (risks.some(r => r === RiskLevel.Medium)) {
+			return RiskLevel.Medium;
+		}
+		return RiskLevel.Low;
+	}
+
+	/**
+	 * Check if confirmation is required based on policy
+	 */
+	private requiresConfirmation(riskLevel: RiskLevel): boolean {
+		const threshold = this.policy.confirmationThreshold;
+		
+		// Define risk ordering
+		const riskOrder = [RiskLevel.Low, RiskLevel.Medium, RiskLevel.High];
+		const riskIndex = riskOrder.indexOf(riskLevel);
+		const thresholdIndex = riskOrder.indexOf(threshold);
+		
+		return riskIndex >= thresholdIndex;
 	}
 
 	/**
@@ -105,23 +248,73 @@ export class SafetyFramework {
 	 * Display operation summary and request confirmation
 	 */
 	async confirmOperation(summary: OperationSummary): Promise<SafetyCheckResult> {
-		// Check for abort first, regardless of TTY
+		// Check for abort first, regardless of mode
 		if (this.abortRequested) {
 			return { confirmed: false, aborted: true, reason: 'Abort requested' };
 		}
 
-		// Skip confirmation if not in TTY (CI environment)
-		if (!this.isTTY()) {
-			return { confirmed: true, aborted: false };
-		}
+		// Assess risk level
+		const riskLevel = this.assessOperationRisk(summary);
 
-		// Display operation summary
-		console.log(`\n⚠️  Autopilot Level ${summary.autopilotLevel} will perform these operations:\n`);
+		// Handle different confirmation modes
+		switch (this.policy.confirmationMode) {
+			case ConfirmationMode.DryRun:
+				console.log('\n🔍 DRY-RUN MODE - No operations will be executed');
+				this.displayOperationSummary(summary, riskLevel);
+				return { confirmed: false, aborted: false, reason: 'Dry-run mode' };
+			
+			case ConfirmationMode.Automatic:
+				// Auto-confirm, but check if confirmation is required by policy
+				if (!this.requiresConfirmation(riskLevel)) {
+					return { confirmed: true, aborted: false };
+				}
+				// For operations requiring confirmation, still auto-confirm but log
+				console.log('\n✓ Auto-confirming operation (automatic mode)');
+				this.displayOperationSummary(summary, riskLevel);
+				return { confirmed: true, aborted: false };
+			
+			case ConfirmationMode.Interactive:
+			default:
+				// Skip confirmation if not in TTY (CI environment)
+				if (!this.isTTY()) {
+					return { confirmed: true, aborted: false };
+				}
+
+				// Check if confirmation is required by policy
+				if (!this.requiresConfirmation(riskLevel)) {
+					return { confirmed: true, aborted: false };
+				}
+
+				// Display and prompt
+				return this.interactiveConfirmation(summary, riskLevel);
+		}
+	}
+
+	/**
+	 * Display operation summary with risk indicators
+	 */
+	private displayOperationSummary(summary: OperationSummary, riskLevel: RiskLevel): void {
+		const riskEmoji = {
+			[RiskLevel.Low]: 'ℹ️',
+			[RiskLevel.Medium]: '⚠️',
+			[RiskLevel.High]: '🚨'
+		};
+
+		const riskLabel = {
+			[RiskLevel.Low]: 'LOW RISK',
+			[RiskLevel.Medium]: 'MEDIUM RISK',
+			[RiskLevel.High]: 'HIGH RISK'
+		};
+
+		console.log(`\n${riskEmoji[riskLevel]}  ${riskLabel[riskLevel]} OPERATION`);
+		console.log(`Autopilot Level ${summary.autopilotLevel} will perform these operations:\n`);
 
 		if (summary.mergeOperations.length > 0) {
 			console.log('🔀 Merge Operations:');
 			for (const op of summary.mergeOperations) {
-				console.log(`  • ${op.description}`);
+				const opRisk = this.assessRiskLevel(op);
+				const indicator = opRisk === RiskLevel.High ? '🚨' : opRisk === RiskLevel.Medium ? '⚠️' : 'ℹ️';
+				console.log(`  ${indicator} ${op.description}`);
 			}
 			console.log('');
 		}
@@ -129,13 +322,53 @@ export class SafetyFramework {
 		if (summary.prOperations.length > 0) {
 			console.log('🔧 PR Operations:');
 			for (const op of summary.prOperations) {
-				console.log(`  • ${op.description}`);
+				const opRisk = this.assessRiskLevel(op);
+				const indicator = opRisk === RiskLevel.High ? '🚨' : opRisk === RiskLevel.Medium ? '⚠️' : 'ℹ️';
+				console.log(`  ${indicator} ${op.description}`);
 			}
 			console.log('');
 		}
 
-		// Prompt for confirmation
-		const answer = await this.prompt('❓ Continue? [y/N/details]: ');
+		if (summary.affectedPRs.length > 0) {
+			console.log(`Affected PRs: ${summary.affectedPRs.map(n => `#${n}`).join(', ')}`);
+			console.log('');
+		}
+	}
+
+	/**
+	 * Interactive confirmation with timeout support
+	 */
+	private async interactiveConfirmation(summary: OperationSummary, riskLevel: RiskLevel): Promise<SafetyCheckResult> {
+		this.displayOperationSummary(summary, riskLevel);
+
+		// Determine timeout behavior
+		const timeoutMs = this.policy.promptTimeout * 1000;
+		const hasTimeout = timeoutMs > 0;
+
+		const promptMessage = hasTimeout
+			? `❓ Continue? [y/N/details] (timeout: ${this.policy.promptTimeout}s, default: ${this.policy.timeoutAction}): `
+			: '❓ Continue? [y/N/details]: ';
+
+		let answer: string;
+
+		if (hasTimeout) {
+			// Prompt with timeout
+			try {
+				answer = await this.promptWithTimeout(promptMessage, timeoutMs);
+			} catch (error) {
+				// Timeout occurred
+				console.log(`\n⏱️  Timeout - ${this.policy.timeoutAction === 'abort' ? 'Aborting' : 'Proceeding'} operation`);
+				return {
+					confirmed: this.policy.timeoutAction === 'proceed',
+					aborted: this.policy.timeoutAction === 'abort',
+					reason: `Timeout after ${this.policy.promptTimeout}s`
+				};
+			}
+		} else {
+			// Prompt without timeout
+			answer = await this.prompt(promptMessage);
+		}
+
 		const normalized = answer.trim().toLowerCase();
 
 		if (normalized === 'details') {
@@ -143,6 +376,8 @@ export class SafetyFramework {
 			console.log('\n📋 Detailed Operation Plan:\n');
 			console.log('Merge Operations:');
 			for (const op of summary.mergeOperations) {
+				const opRisk = this.assessRiskLevel(op);
+				console.log(`  Risk: ${opRisk.toUpperCase()}`);
 				console.log(`  Type: ${op.type}`);
 				console.log(`  Description: ${op.description}`);
 				if (op.branch) console.log(`  Branch: ${op.branch}`);
@@ -152,7 +387,7 @@ export class SafetyFramework {
 			}
 
 			// Ask again after showing details
-			return this.confirmOperation(summary);
+			return this.interactiveConfirmation(summary, riskLevel);
 		}
 
 		if (normalized === 'y' || normalized === 'yes') {
@@ -173,6 +408,29 @@ export class SafetyFramework {
 
 		return new Promise((resolve) => {
 			rl.question(question, (answer) => {
+				rl.close();
+				resolve(answer);
+			});
+		});
+	}
+
+	/**
+	 * Prompt user for input with timeout
+	 */
+	private promptWithTimeout(question: string, timeoutMs: number): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const rl = readline.createInterface({
+				input: process.stdin,
+				output: process.stdout,
+			});
+
+			const timer = setTimeout(() => {
+				rl.close();
+				reject(new Error('Prompt timeout'));
+			}, timeoutMs);
+
+			rl.question(question, (answer) => {
+				clearTimeout(timer);
 				rl.close();
 				resolve(answer);
 			});
