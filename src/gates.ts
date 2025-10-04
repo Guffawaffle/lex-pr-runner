@@ -3,7 +3,13 @@ import { Plan, Gate, PlanItem, Policy, GateResult, GateStatus, RetryConfig } fro
 import { ExecutionState } from "./executionState.js";
 import path from "path";
 import fs from "fs";
+<<<<<<< HEAD
 import { classifyError, formatErrorForUser, ErrorType } from "./core/errorRecovery.js";
+||||||| eb067ce
+=======
+import { MemoryMonitor, OperationCache } from "./performance.js";
+import { metrics, METRICS } from "./monitoring/metrics.js";
+>>>>>>> origin/copilot/fix-e5c8d1fa-1689-4596-b747-e58071cfe83e
 
 /**
  * Gate execution with local command running, retry logic, and policy-aware execution
@@ -329,6 +335,10 @@ export async function executeGatesWithPolicy(
 		mergeRule: { type: "strict-required" }
 	};
 
+	// Initialize performance monitoring
+	const perfConfig = policy.performance || {};
+	const memoryMonitor = new MemoryMonitor(perfConfig);
+
 	// Ensure base artifact directory exists
 	if (!fs.existsSync(artifactDir)) {
 		fs.mkdirSync(artifactDir, { recursive: true });
@@ -338,43 +348,69 @@ export async function executeGatesWithPolicy(
 	const executionOrder = buildExecutionOrder(plan);
 
 	// Execute gates in dependency order with concurrency control
-	let activeWorkers = 0;
 	const maxWorkers = policy.maxWorkers;
 	const pendingNodes = [...executionOrder];
 	const executing = new Set<string>();
+	const completedNodes = new Set<string>();
 
-	while (pendingNodes.length > 0 || activeWorkers > 0) {
-		// Start new workers if we have capacity and eligible nodes
-		while (activeWorkers < maxWorkers && pendingNodes.length > 0) {
-			const nextNode = findNextEligibleNode(pendingNodes, executing, executionState);
-			if (!nextNode) {
-				break; // No eligible nodes at the moment
+	while (completedNodes.size < executionOrder.length) {
+		// Check memory and throttle if needed
+		await memoryMonitor.throttleIfNeeded();
+
+		// Find all eligible nodes that can start now
+		const eligible: string[] = [];
+		for (const node of pendingNodes) {
+			if (executing.size >= maxWorkers) {
+				break; // Hit worker limit
 			}
+			if (findNextEligibleNode([node], executing, executionState) === node) {
+				eligible.push(node);
+			}
+		}
 
-			const nodeIndex = pendingNodes.indexOf(nextNode);
+		// Start all eligible nodes
+		const promises: Promise<void>[] = [];
+		for (const node of eligible) {
+			const nodeIndex = pendingNodes.indexOf(node);
 			pendingNodes.splice(nodeIndex, 1);
-			executing.add(nextNode);
-			activeWorkers++;
+			executing.add(node);
+			
+			// Update active workers metric
+			metrics.setGauge(METRICS.ACTIVE_WORKERS, executing.size);
 
-			// Execute node gates asynchronously
-			const item = plan.items.find(i => i.name === nextNode)!;
-			executeItemGates(item, policy, executionState, artifactDir, timeoutMs)
+			const item = plan.items.find(i => i.name === node)!;
+			const promise = executeItemGates(item, policy, executionState, artifactDir, timeoutMs)
 				.then(() => {
-					executing.delete(nextNode);
-					activeWorkers--;
-
-					// Propagate status changes
+					executing.delete(node);
+					completedNodes.add(node);
+					metrics.setGauge(METRICS.ACTIVE_WORKERS, executing.size);
 					executionState.propagateBlockedStatus();
 				})
 				.catch((error) => {
-					console.error(`Error executing gates for ${nextNode}:`, error);
-					executing.delete(nextNode);
-					activeWorkers--;
+					console.error(`Error executing gates for ${node}:`, error);
+					executing.delete(node);
+					completedNodes.add(node);
+					metrics.setGauge(METRICS.ACTIVE_WORKERS, executing.size);
 				});
+
+			promises.push(promise);
 		}
 
-		// Wait a bit before checking again
-		await new Promise(resolve => setTimeout(resolve, 100));
+		// Wait for at least one to complete before checking for more work
+		if (promises.length > 0) {
+			await Promise.race(promises);
+		} else if (executing.size > 0) {
+			// No new eligible nodes, but some are still executing
+			await new Promise(resolve => setTimeout(resolve, 50));
+		} else {
+			// No executing and no eligible - should not happen if graph is valid
+			break;
+		}
+	}
+
+	// Final wait for any remaining workers
+	while (executing.size > 0) {
+		await new Promise(resolve => setTimeout(resolve, 50));
 	}
 }
 

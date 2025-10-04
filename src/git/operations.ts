@@ -5,6 +5,8 @@
 
 import { simpleGit, SimpleGit, MergeResult as GitMergeResult } from "simple-git";
 import { Plan, PlanItem } from "../schema.js";
+import { metrics, METRICS } from "../monitoring/metrics.js";
+import { profiler } from "../monitoring/profiler.js";
 
 export interface MergeOperation {
 	item: PlanItem;
@@ -89,6 +91,9 @@ export class GitOperations {
 	 * Execute a single merge operation with conflict detection
 	 */
 	async executeMergeOperation(operation: MergeOperation): Promise<WeaveResult> {
+		const operationId = `merge_${operation.item.name}`;
+		profiler.start(operationId, { item: operation.item.name, strategy: operation.strategy });
+
 		try {
 			const { item, strategy } = operation;
 			const branchName = item.name; // Assuming item.name is the branch name
@@ -102,6 +107,8 @@ export class GitOperations {
 			);
 
 			if (!branchExists) {
+				profiler.end(operationId);
+				metrics.incrementCounter(METRICS.MERGE_FAILURE_TOTAL, { reason: 'branch_not_found' });
 				return {
 					success: false,
 					item,
@@ -134,6 +141,8 @@ export class GitOperations {
 						await this.git.rebase([`origin/${branchName}`]);
 						gitMergeResult = await this.git.merge([`origin/${branchName}`, '--ff-only']);
 					} catch (rebaseError) {
+						profiler.end(operationId);
+						metrics.incrementCounter(METRICS.MERGE_FAILURE_TOTAL, { reason: 'rebase_conflict' });
 						return {
 							success: false,
 							item,
@@ -153,6 +162,9 @@ export class GitOperations {
 				const status = await this.git.status();
 				const conflictedFiles = status.conflicted || [];
 
+				profiler.end(operationId, { item: operation.item.name, status: 'conflict' });
+				metrics.incrementCounter(METRICS.MERGE_FAILURE_TOTAL, { reason: 'conflict' });
+
 				return {
 					success: false,
 					item,
@@ -160,6 +172,9 @@ export class GitOperations {
 					message: 'Merge conflicts detected',
 				};
 			}
+
+			profiler.end(operationId, { item: operation.item.name, status: 'success' });
+			metrics.incrementCounter(METRICS.MERGE_SUCCESS_TOTAL, { strategy: operation.strategy });
 
 			return {
 				success: true,
@@ -169,6 +184,8 @@ export class GitOperations {
 			};
 
 		} catch (error) {
+			profiler.end(operationId, { item: operation.item.name, status: 'error' });
+			metrics.incrementCounter(METRICS.MERGE_FAILURE_TOTAL, { reason: 'exception' });
 			return {
 				success: false,
 				item: operation.item,
