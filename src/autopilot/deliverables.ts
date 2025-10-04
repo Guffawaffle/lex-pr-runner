@@ -87,12 +87,27 @@ export class DeliverablesManager {
 
 		// Convert directory timestamp back to ISO format for manifest
 		// Directory format: 2024-01-01T10-00-00 -> ISO: 2024-01-01T10:00:00Z
+		// or with millis: 2024-01-01T10-00-00-123 -> ISO: 2024-01-01T10:00:00.123Z
 		let isoTimestamp: string;
 		if (ts.includes("T")) {
 			// Has date-time separator, convert time part hyphens to colons
 			const parts = ts.split("T");
-			const timePart = parts[1].replace(/-/g, ":");
-			isoTimestamp = `${parts[0]}T${timePart}Z`;
+			const datePart = parts[0];
+			const timePart = parts[1];
+			
+			// Split time and milliseconds if present
+			const timeSegments = timePart.split("-");
+			if (timeSegments.length >= 3) {
+				// Has at least HH-MM-SS
+				const hours = timeSegments[0];
+				const minutes = timeSegments[1];
+				const seconds = timeSegments[2];
+				const millis = timeSegments.length > 3 ? `.${timeSegments[3]}` : "";
+				isoTimestamp = `${datePart}T${hours}:${minutes}:${seconds}${millis}Z`;
+			} else {
+				// Invalid format, fall back to current time
+				isoTimestamp = new Date().toISOString();
+			}
 		} else {
 			// No timestamp provided, use current time
 			isoTimestamp = new Date().toISOString();
