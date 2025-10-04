@@ -2,9 +2,18 @@
 
 **Fan-out tasks as multiple PRs in parallel, then build a merge pyramid from the blocks. Compute dependency order, run gates locally, and merge cleanly.**
 
+## Features
+
+- **📋 Interactive Plan Review**: Human-in-the-loop validation and editing of merge plans
+- **🔗 Dependency Resolution**: Automatic computation of merge order with cycle detection
+- **✅ Quality Gates**: Execute tests, linters, and custom validation gates
+- **🔄 Autopilot Levels**: Graduated automation from dry-run to full merge
+- **📊 Plan Comparison**: Diff and compare plan versions
+- **📝 History Tracking**: Audit trail for plan changes and approvals
+
 ## Components
 
-- **Runner CLI**: TypeScript command-line app under `src/**`. Commands: `plan|run|merge|doctor|format|ci-replay` + `execute|merge-order|report|status|schema`
+- **Runner CLI**: TypeScript command-line app under `src/**`. Commands: `plan|run|merge|doctor|format|ci-replay` + `execute|merge-order|report|status|schema|plan-review|plan-diff`
 - **MCP server**: Optional read-only adapter at `src/mcp/server.ts`. Exposes tools (`plan.create`, `gates.run`, `merge.apply`) and resources under `.smartergpt/runner/`
 - **Workspace profile**: Portable example profile under `.smartergpt/**`. Configuration inputs the runner consumes
 
@@ -40,14 +49,34 @@ lex-pr discover
 # 5. Generate plan
 lex-pr plan --from-github
 
-# 6. Execute gates
+# 6. Review plan interactively
+lex-pr plan-review plan.json
+
+# 7. Execute gates
 lex-pr execute plan.json
 
-# 7. Merge PRs
+# 8. Merge PRs
 lex-pr merge plan.json
 ```
 
 See [docs/quickstart.md](docs/quickstart.md) for a complete 5-minute onboarding guide.
+
+### Interactive Plan Review
+
+Review and edit plans before execution:
+
+```bash
+# Interactive review with validation
+lex-pr plan-review plan.json
+
+# Compare two plans
+lex-pr plan-diff old-plan.json new-plan.json
+
+# Save review history
+lex-pr plan-review plan.json --save-history --output approved-plan.json
+```
+
+See [docs/interactive-plan-review.md](docs/interactive-plan-review.md) for complete interactive workflow guide.
 
 ### For Development
 
