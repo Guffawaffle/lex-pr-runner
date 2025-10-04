@@ -176,12 +176,118 @@ safety.logSafetyDecision('rollback', 'executed', {
 [SAFETY-LOG] {"timestamp":"2025-10-02T15:30:45.123Z","operation":"containment-check","decision":"passed","prNumbers":[123,456],"targetBranch":"main"}
 ```
 
+### 7. Risk Assessment & Classification
+
+Operations are automatically classified by risk level (Low, Medium, High):
+
+```typescript
+import { SafetyFramework, RiskLevel } from './autopilot/safety';
+
+const safety = new SafetyFramework(githubAPI);
+
+// Assess individual operation risk
+const operation = { 
+  type: 'merge', 
+  description: 'Merge PR-123', 
+  prNumber: 123 
+};
+const riskLevel = safety.assessRiskLevel(operation); // RiskLevel.High
+
+// Assess overall operation set risk
+const summary = {
+  autopilotLevel: 4,
+  mergeOperations: [
+    { type: 'merge', description: 'Merge PR-101', prNumber: 101 }, // High
+    { type: 'merge', description: 'Merge PR-102', prNumber: 102 }, // High
+    { type: 'push', description: 'Push to main' } // High
+  ],
+  prOperations: [],
+  affectedPRs: [101, 102]
+};
+const overallRisk = safety.assessOperationRisk(summary); // RiskLevel.High
+```
+
+**Risk Levels:**
+- 🚨 **High Risk**: Multi-PR merges, push operations, force operations
+- ⚠️ **Medium Risk**: Single PR operations, branch creation, PR opening
+- ℹ️ **Low Risk**: Read-only operations, status checks, comments
+
+### 8. Confirmation Modes
+
+Choose how confirmations are handled based on your automation level:
+
+```typescript
+import { ConfirmationMode } from './autopilot/safety';
+
+// Interactive mode (default) - prompt user in TTY
+const interactiveSafety = new SafetyFramework(githubAPI, {
+  confirmationMode: ConfirmationMode.Interactive
+});
+
+// Automatic mode - auto-confirm operations
+const autoSafety = new SafetyFramework(githubAPI, {
+  confirmationMode: ConfirmationMode.Automatic
+});
+
+// Dry-run mode - preview without executing
+const dryRunSafety = new SafetyFramework(githubAPI, {
+  confirmationMode: ConfirmationMode.DryRun
+});
+```
+
+**Modes:**
+- **Interactive**: Prompts user for confirmation (default, respects TTY)
+- **Automatic**: Auto-confirms all operations (for full automation)
+- **Dry-run**: Displays operations but never executes
+
+### 9. Safety Policies
+
+Configure fine-grained safety rules with policies:
+
+```typescript
+import { RiskLevel, ConfirmationMode } from './autopilot/safety';
+
+const safety = new SafetyFramework(githubAPI, {
+  confirmationThreshold: RiskLevel.Medium,  // Require confirmation for Medium+ risk
+  confirmationMode: ConfirmationMode.Interactive,
+  promptTimeout: 30,  // 30 second timeout for prompts
+  timeoutAction: 'abort'  // Abort on timeout (or 'proceed')
+});
+
+// Update policy at runtime
+safety.updatePolicy({
+  confirmationThreshold: RiskLevel.High,  // Only confirm high-risk ops
+  promptTimeout: 60
+});
+```
+
+**Policy Options:**
+- `confirmationThreshold`: Minimum risk level requiring confirmation
+- `confirmationMode`: How to handle confirmations (interactive/automatic/dry-run)
+- `promptTimeout`: Timeout in seconds (0 = no timeout)
+- `timeoutAction`: What to do on timeout ('abort' or 'proceed')
+
+**Example Prompt with Policy:**
+```
+🚨 HIGH RISK OPERATION
+Autopilot Level 4 will perform these operations:
+
+🔀 Merge Operations:
+  🚨 Merge PR-101 → integration branch
+  🚨 Merge PR-102 → integration branch
+  🚨 Push integration branch to main
+
+Affected PRs: #101, #102
+
+❓ Continue? [y/N/details] (timeout: 30s, default: abort):
+```
+
 ## Complete Example
 
 Full safety workflow for autopilot operations:
 
 ```typescript
-import { SafetyFramework } from './autopilot/safety';
+import { SafetyFramework, RiskLevel, ConfirmationMode } from './autopilot/safety';
 import { createGitHubAPI } from './github/api';
 
 async function runAutopilotMerge(prNumbers: number[], targetBranch: string) {
@@ -190,7 +296,14 @@ async function runAutopilotMerge(prNumbers: number[], targetBranch: string) {
     throw new Error('GitHub API not available');
   }
 
-  const safety = new SafetyFramework(githubAPI);
+  // Create safety framework with custom policy
+  const safety = new SafetyFramework(githubAPI, {
+    confirmationThreshold: RiskLevel.Medium,  // Confirm medium+ risk operations
+    confirmationMode: ConfirmationMode.Interactive,
+    promptTimeout: 30,  // 30 second timeout
+    timeoutAction: 'abort'  // Abort on timeout
+  });
+  
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
   // Install kill switch
@@ -222,22 +335,37 @@ async function runAutopilotMerge(prNumbers: number[], targetBranch: string) {
     await safety.applyAdvisoryLock(prNumbers, timestamp);
     safety.logSafetyDecision('advisory-lock', 'applied', { prNumbers, timestamp });
 
-    // Step 4: Get user confirmation
+    // Step 4: Get user confirmation with risk assessment
     const summary = {
       autopilotLevel: 3,
       mergeOperations: [
-        { type: 'create-branch', description: `Create branch: merge-weave/${timestamp}` },
+        { 
+          type: 'create-branch', 
+          description: `Create branch: merge-weave/${timestamp}`,
+          riskLevel: RiskLevel.Medium 
+        },
         ...prNumbers.map(pr => ({
           type: 'merge' as const,
           description: `Merge PR-${pr} → integration branch`,
           prNumber: pr,
+          riskLevel: RiskLevel.High  // Explicitly mark as high risk
         })),
-        { type: 'push', description: 'Push integration branch to origin' },
+        { 
+          type: 'push', 
+          description: 'Push integration branch to origin',
+          riskLevel: RiskLevel.High
+        },
       ],
       prOperations: [
-        { type: 'open-pr', description: 'Open integration PR targeting ' + targetBranch, target: targetBranch },
+        { 
+          type: 'open-pr', 
+          description: 'Open integration PR targeting ' + targetBranch, 
+          target: targetBranch,
+          riskLevel: RiskLevel.Medium
+        },
       ],
       affectedPRs: prNumbers,
+      riskLevel: RiskLevel.High  // Overall operation is high risk
     };
 
     const confirmResult = await safety.confirmOperation(summary);
@@ -337,22 +465,25 @@ const check = await safety.performContainmentChecks([123], 'main');
 ## Design Principles
 
 1. **Fail-safe defaults**: Require explicit confirmation for destructive operations
-2. **Graceful degradation**: Skip prompts in CI, but always respect abort signals
-3. **Clear communication**: Provide detailed operation summaries and error messages
-4. **Audit trail**: Log all safety decisions for troubleshooting and compliance
-5. **Idempotent operations**: Safe to retry lock removal and other operations
-6. **Minimal dependencies**: Only requires GitHub API for label operations
+2. **Risk-based gating**: Automatically assess and classify operations by risk level
+3. **Flexible policies**: Configurable confirmation thresholds and modes
+4. **Graceful degradation**: Skip prompts in CI, but always respect abort signals
+5. **Clear communication**: Provide detailed operation summaries with risk indicators
+6. **Audit trail**: Log all safety decisions for troubleshooting and compliance
+7. **Idempotent operations**: Safe to retry lock removal and other operations
+8. **Minimal dependencies**: Only requires GitHub API for label operations
 
 ## Testing
 
 The Safety Framework includes comprehensive test coverage:
 
-- **Unit tests** (`tests/safety-framework.spec.ts`): 26 tests covering all methods
+- **Unit tests** (`tests/safety-framework.spec.ts`): 26 tests covering all core methods
+- **Enhanced tests** (`tests/safety-enhanced.spec.ts`): 18 tests for risk assessment and policies
 - **Integration tests** (`tests/safety-integration.spec.ts`): 11 tests for end-to-end workflows
 
 Run tests:
 ```bash
-npm test -- tests/safety-framework.spec.ts tests/safety-integration.spec.ts
+npm test -- tests/safety-framework.spec.ts tests/safety-enhanced.spec.ts tests/safety-integration.spec.ts
 ```
 
 ## Future Enhancements
@@ -361,7 +492,8 @@ Potential improvements for future versions:
 
 - [ ] Distributed lock coordination (Redis/etcd) for multi-runner scenarios
 - [ ] Webhook notifications for long-running operations
-- [ ] Configurable timeout for user confirmation
+- [x] ~~Configurable timeout for user confirmation~~ ✅ Implemented
 - [ ] Integration with SARIF for security gate results
 - [ ] Checkpoint/resume support for interrupted operations
-- [ ] Dry-run mode for testing safety checks without execution
+- [x] ~~Dry-run mode for testing safety checks without execution~~ ✅ Implemented
+- [x] ~~Risk-based confirmation policies~~ ✅ Implemented
