@@ -1,17 +1,31 @@
 /**
  * Execution state management for the lex-pr-runner
  * Handles status tracking, propagation, and merge eligibility
+ * Includes error diagnostics and recovery tracking
  */
 
 import { Plan, PlanItem, Policy, NodeResult, GateResult, NodeStatus, GateStatus } from './schema.js';
+import { classifyError, ClassifiedError } from './core/errorRecovery.js';
 
 /**
- * Execution state manager
+ * Error diagnostic information
+ */
+export interface ErrorDiagnostic {
+	nodeName: string;
+	gateName: string;
+	classified: ClassifiedError;
+	timestamp: string;
+	attemptNumber: number;
+}
+
+/**
+ * Execution state manager with error tracking
  */
 export class ExecutionState {
 	private results: Map<string, NodeResult> = new Map();
 	private plan: Plan;
 	private policy: Policy;
+	private errorDiagnostics: ErrorDiagnostic[] = [];
 
 	constructor(plan: Plan) {
 		this.plan = plan;
@@ -35,6 +49,48 @@ export class ExecutionState {
 				eligibleForMerge: false
 			});
 		}
+	}
+
+	/**
+	 * Record error diagnostic for troubleshooting
+	 */
+	recordErrorDiagnostic(nodeName: string, gateName: string, error: Error, attemptNumber: number): void {
+		const classified = classifyError(error, `Gate '${gateName}' in node '${nodeName}'`);
+		this.errorDiagnostics.push({
+			nodeName,
+			gateName,
+			classified,
+			timestamp: new Date().toISOString(),
+			attemptNumber
+		});
+	}
+
+	/**
+	 * Get error diagnostics
+	 */
+	getErrorDiagnostics(): ErrorDiagnostic[] {
+		return [...this.errorDiagnostics];
+	}
+
+	/**
+	 * Get summary of errors by type
+	 */
+	getErrorSummary(): { transient: number; permanent: number; unknown: number } {
+		const summary = { transient: 0, permanent: 0, unknown: 0 };
+		for (const diagnostic of this.errorDiagnostics) {
+			switch (diagnostic.classified.type) {
+				case 'transient':
+					summary.transient++;
+					break;
+				case 'permanent':
+					summary.permanent++;
+					break;
+				case 'unknown':
+					summary.unknown++;
+					break;
+			}
+		}
+		return summary;
 	}
 
 	/**

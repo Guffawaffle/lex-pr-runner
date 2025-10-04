@@ -1,11 +1,19 @@
 /**
  * GitHub API integration for PR discovery and metadata extraction
  * Maintains deterministic ordering and stable output
+ * Includes error recovery with retry and circuit breaker patterns
  */
 
 import { Octokit } from "@octokit/rest";
 import { simpleGit } from "simple-git";
 import { stableSort } from "../util/canonicalJson.js";
+import {
+	retryWithBackoff,
+	createGitHubCircuitBreaker,
+	classifyError,
+	formatErrorForUser,
+	CircuitBreaker
+} from "../core/errorRecovery.js";
 
 /**
  * Normalize a label entry returned by octokit into a string name.
@@ -39,53 +47,71 @@ export interface GitHubConfig {
 }
 
 /**
- * GitHub API client for PR operations
+ * GitHub API client for PR operations with error recovery
  */
 export class GitHubAPI {
 	private octokit: Octokit;
 	private config: GitHubConfig;
+	private circuitBreaker: CircuitBreaker;
 
 	constructor(config: GitHubConfig) {
 		this.config = config;
 		this.octokit = new Octokit({
 			auth: config.token || process.env.GITHUB_TOKEN,
 		});
+		this.circuitBreaker = createGitHubCircuitBreaker();
 	}
 
 	/**
-	 * Discover open pull requests with stable ordering
+	 * Discover open pull requests with stable ordering and error recovery
 	 */
 	async discoverPullRequests(state: "open" | "closed" | "all" = "open"): Promise<GitHubPullRequest[]> {
-		try {
-			const { data: pulls } = await this.octokit.rest.pulls.list({
-				owner: this.config.owner,
-				repo: this.config.repo,
-				state,
-				sort: "updated",
-				direction: "desc",
-				per_page: 100,
-			});
+		return retryWithBackoff(
+			async () => {
+				return this.circuitBreaker.execute(async () => {
+					try {
+						const { data: pulls } = await this.octokit.rest.pulls.list({
+							owner: this.config.owner,
+							repo: this.config.repo,
+							state,
+							sort: "updated",
+							direction: "desc",
+							per_page: 100,
+						});
 
-			// Transform to our interface and sort for deterministic output
-			const pullRequests: GitHubPullRequest[] = pulls.map(pull => ({
-				number: pull.number,
-				title: pull.title,
-				branch: pull.head.ref,
-				sha: pull.head.sha,
-				state: pull.state as "open" | "closed" | "merged",
-				labels: stableSort(pull.labels.map(extractLabelName)),
-				author: pull.user?.login || 'unknown',
-				baseBranch: pull.base.ref,
-				createdAt: pull.created_at,
-				updatedAt: pull.updated_at,
-			}));
+						// Transform to our interface and sort for deterministic output
+						const pullRequests: GitHubPullRequest[] = pulls.map(pull => ({
+							number: pull.number,
+							title: pull.title,
+							branch: pull.head.ref,
+							sha: pull.head.sha,
+							state: pull.state as "open" | "closed" | "merged",
+							labels: stableSort(pull.labels.map(extractLabelName)),
+							author: pull.user?.login || 'unknown',
+							baseBranch: pull.base.ref,
+							createdAt: pull.created_at,
+							updatedAt: pull.updated_at,
+						}));
 
-			// Sort by PR number for deterministic ordering
-			pullRequests.sort((a, b) => a.number - b.number);
-			return pullRequests;
-		} catch (error) {
-			throw new GitHubAPIError(`Failed to fetch pull requests: ${error instanceof Error ? error.message : String(error)}`);
-		}
+						// Sort by PR number for deterministic ordering
+						pullRequests.sort((a, b) => a.number - b.number);
+						return pullRequests;
+					} catch (error) {
+						const classified = classifyError(error, 'Fetching pull requests');
+						console.error(formatErrorForUser(classified));
+						throw new GitHubAPIError(`Failed to fetch pull requests: ${error instanceof Error ? error.message : String(error)}`);
+					}
+				});
+			},
+			{
+				maxAttempts: 3,
+				initialDelayMs: 1000,
+				backoffMultiplier: 2
+			},
+			(attempt, error, delayMs) => {
+				console.warn(`Retrying GitHub API call (attempt ${attempt}): ${error.error.message}. Waiting ${delayMs}ms...`);
+			}
+		);
 	}
 
 	/**
