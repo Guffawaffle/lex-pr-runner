@@ -184,16 +184,51 @@ lex-pr schema validate --plan ./configs/plan.json --json
 
 ### `plan`
 
-Generate plan from configuration sources.
+Generate plan from configuration sources or GitHub PRs.
 
 ```bash
 lex-pr plan [options]
 
 Options:
-  --out <dir>       Output directory for artifacts (default: ".smartergpt/runner")
-  --json            Output canonical plan JSON to stdout only
-  --dry-run         Validate inputs and show what would be written
-  -h, --help        Display help for command
+  --out <dir>               Output directory for artifacts (default: ".smartergpt/runner")
+  --json                    Output canonical plan JSON to stdout only
+  --dry-run                 Validate inputs and show what would be written
+  --from-github             Auto-discover PRs from GitHub API
+  --query <query>           GitHub search query (e.g., 'is:open label:stack:*')
+  --labels <labels>         Filter PRs by comma-separated labels
+  --include-drafts          Include draft PRs in the plan
+  --github-token <token>    GitHub API token (or use GITHUB_TOKEN env var)
+  --owner <owner>           GitHub repository owner (auto-detected from git remote)
+  --repo <repo>             GitHub repository name (auto-detected from git remote)
+  --required-gates <gates>  Comma-separated list of required gates (default: lint,typecheck,test)
+  --max-workers <n>         Maximum parallel workers for execution (default: 2)
+  --target <branch>         Target branch for merging PRs (default: repo default branch)
+  --validate-cycles         Enable dependency cycle detection (default: true)
+  --optimize                Optimize plan for parallel execution
+  -h, --help                Display help for command
+```
+
+#### Plan Generation Modes
+
+**1. Configuration Files Mode (Default)**
+```bash
+# Generate from .smartergpt/ configuration files
+lex-pr plan
+```
+
+**2. GitHub Auto-Discovery Mode**
+```bash
+# Auto-discover PRs from GitHub repository
+lex-pr plan --from-github
+
+# With custom GitHub search query
+lex-pr plan --from-github --query "is:open label:stack:feature"
+
+# Filter by specific labels
+lex-pr plan --from-github --labels "enhancement,feature"
+
+# Include draft PRs
+lex-pr plan --from-github --include-drafts
 ```
 
 #### Examples
@@ -210,6 +245,49 @@ lex-pr plan --json
 
 # Validate inputs without writing files
 lex-pr plan --dry-run
+
+# GitHub mode: Auto-discover and generate plan
+lex-pr plan --from-github --github-token $GITHUB_TOKEN
+
+# Custom policy configuration
+lex-pr plan --from-github \
+  --required-gates "lint,test,security-scan" \
+  --max-workers 4 \
+  --target develop
+
+# Optimize and validate plan
+lex-pr plan --from-github --optimize --validate-cycles
+
+# Search for specific PRs
+lex-pr plan --from-github \
+  --query "is:open label:stack:*" \
+  --labels "priority-high"
+```
+
+#### Dependency Validation
+
+The plan command automatically validates dependencies:
+
+- **Cycle Detection**: Detects circular dependencies between PRs (enabled by default with `--validate-cycles`)
+- **Unknown Dependencies**: Validates all dependencies exist in the plan
+- **Optimization**: Shows parallelization levels with `--optimize` flag
+
+```bash
+# Enable cycle detection (default)
+lex-pr plan --from-github --validate-cycles
+
+# Show optimization levels
+lex-pr plan --from-github --optimize
+```
+
+Example output with `--optimize`:
+```
+✓ Auto-discovered 5 PRs from GitHub
+✓ Dependency validation passed (no cycles detected)
+✓ Plan optimized for parallel execution: 3 levels
+  Level 1: PR-100
+  Level 2: PR-101, PR-102
+  Level 3: PR-103, PR-104
 ```
 
 #### JSON Output Schema (`--json` flag)
