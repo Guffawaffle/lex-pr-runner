@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0.0",
+  "target": "main",
+  "items": [
+    { "name": "copilot/fix-fc02eed8-4e2f-484e-8317-8303602e4605" },
+    { "name": "copilot/fix-ce20f41e-29c2-465b-b0de-26e519e882bc" }
+  ]
+}
