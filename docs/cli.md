@@ -2,7 +2,9 @@
 
 Complete reference for the lex-pr-runner command-line interface, including all subcommands, options, and JSON output schemas.
 
-> **📖 See Also**: [Autopilot Levels](./autopilot-levels.md) - Comprehensive guide to automation levels 0-4
+> **📖 See Also**: 
+> - [Autopilot Levels](./autopilot-levels.md) - Comprehensive guide to automation levels 0-4
+> - [Advanced CLI Features](./advanced-cli.md) - Power user tools and interactive modes
 
 ## Global Options
 
@@ -652,6 +654,218 @@ lex-pr plan --json > output1.json
 lex-pr plan --json > output2.json  
 cmp output1.json output2.json     # Should be identical
 ```
+
+---
+
+## Advanced Commands
+
+### `view`
+
+Interactive plan viewer with keyboard navigation and filtering.
+
+```bash
+lex-pr view [options] [file]
+
+Arguments:
+  file              Path to plan.json file (alternative to --plan)
+
+Options:
+  --plan <file>     Path to plan.json file
+  --filter <text>   Initial filter text
+  --no-deps         Hide dependencies by default
+  --no-gates        Hide gates by default
+  -h, --help        Display help for command
+```
+
+**Keyboard Navigation:**
+- `↑/↓` - Navigate items
+- `/` - Enter filter mode
+- `d` - Toggle dependencies
+- `g` - Toggle gates
+- `q` - Quit
+
+#### Examples
+
+```bash
+# Open interactive viewer
+lex-pr view plan.json
+
+# Start with a filter
+lex-pr view plan.json --filter "feature"
+
+# Hide gates by default
+lex-pr view plan.json --no-gates
+```
+
+---
+
+### `query`
+
+Advanced query and analysis of plan using SQL-like syntax.
+
+```bash
+lex-pr query [file] [query] [options]
+
+Arguments:
+  file              Path to plan.json file (alternative to --plan)
+  query             Query string (e.g., 'level eq 1', 'name contains feature')
+
+Options:
+  --plan <file>     Path to plan.json file
+  --format <fmt>    Output format: json, table, csv (default: "table")
+  --output <file>   Output file (default: stdout)
+  --stats           Show plan statistics
+  --roots           Show root nodes (no dependencies)
+  --leaves          Show leaf nodes (no dependents)
+  --level <level>   Filter by merge level
+  -h, --help        Display help for command
+```
+
+**Query Syntax:**
+```
+field operator value [AND field operator value]
+```
+
+**Operators:** `eq`, `ne`, `contains`, `in`, `gt`, `lt`, `gte`, `lte`
+
+**Fields:** `name`, `level`, `depsCount`, `gatesCount`, `dependentsCount`
+
+#### Examples
+
+```bash
+# Find all items at merge level 1
+lex-pr query plan.json "level eq 1"
+
+# Find items with specific name pattern
+lex-pr query plan.json "name contains feature"
+
+# Find items with more than 2 dependencies
+lex-pr query plan.json "depsCount gt 2"
+
+# Complex queries with AND
+lex-pr query plan.json "level eq 1 AND depsCount eq 0"
+
+# Show plan statistics
+lex-pr query plan.json --stats
+
+# Output as JSON
+lex-pr query plan.json "level eq 1" --format json
+
+# Save to file
+lex-pr query plan.json --roots --output roots.json --format json
+```
+
+---
+
+### `retry`
+
+Retry failed gates with selective filtering.
+
+```bash
+lex-pr retry [options]
+
+Options:
+  --state-dir <dir>  State directory (default: ".smartergpt/runner")
+  --filter <text>    Filter items/gates to retry
+  --items <items>    Comma-separated list of items to retry
+  --dry-run          Show what would be retried without executing
+  --json             Output JSON format
+  -h, --help         Display help for command
+```
+
+#### Examples
+
+```bash
+# Show all failed gates
+lex-pr retry --dry-run
+
+# Retry all failed gates
+lex-pr retry
+
+# Retry specific items
+lex-pr retry --items "item1,item2"
+
+# Retry with filter
+lex-pr retry --filter "integration"
+
+# JSON output
+lex-pr retry --json
+```
+
+---
+
+### `completion`
+
+Generate shell completion scripts for bash and zsh.
+
+```bash
+lex-pr completion [shell] [options]
+
+Arguments:
+  shell             Shell type: bash, zsh (default: "bash")
+
+Options:
+  --install         Show installation instructions
+  -h, --help        Display help for command
+```
+
+#### Examples
+
+```bash
+# Generate bash completion
+lex-pr completion bash
+
+# Generate zsh completion
+lex-pr completion zsh
+
+# Show installation instructions
+lex-pr completion bash --install
+```
+
+**Installation:**
+
+For bash:
+```bash
+# Add to ~/.bashrc
+eval "$(lex-pr completion bash)"
+```
+
+For zsh:
+```bash
+# Add to ~/.zshrc
+eval "$(lex-pr completion zsh)"
+```
+
+---
+
+### Enhanced `merge` Options
+
+The `merge` command now supports batch operations:
+
+```bash
+lex-pr merge [options]
+
+Additional Batch Options:
+  --batch               Enable batch mode for multiple items
+  --filter <query>      Filter items using query language
+  --levels <levels>     Comma-separated list of levels to merge
+  --items <items>       Comma-separated list of items to merge
+```
+
+#### Batch Examples
+
+```bash
+# Merge specific items
+lex-pr merge plan.json --batch --items "item1,item2" --execute
+
+# Merge all items at specific levels
+lex-pr merge plan.json --batch --levels "1,2" --execute
+
+# Merge items matching a query
+lex-pr merge plan.json --batch --filter "level eq 1" --execute
+```
+
+---
 
 ## Error Handling
 
