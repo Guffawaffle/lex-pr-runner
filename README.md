@@ -49,6 +49,20 @@ lex-pr merge plan.json
 
 See [docs/quickstart.md](docs/quickstart.md) for a complete 5-minute onboarding guide.
 
+## 📚 Documentation
+
+**[Complete Documentation →](docs/README.md)**
+
+### Quick Links
+- **[Getting Started](docs/quickstart.md)** - 5-minute onboarding
+- **[Architecture Overview](docs/architecture.md)** - System design & philosophy
+- **[CLI Reference](docs/cli.md)** - Complete command documentation
+- **[Troubleshooting](docs/troubleshooting.md)** - Common issues & solutions
+- **[Migration Guide](docs/migration-guide.md)** - From manual to automated
+- **[Video Tutorials](docs/tutorials/)** - Step-by-step video guides
+- **[Workflows](docs/workflows/)** - Examples for different team sizes
+- **[CI/CD Integrations](docs/integrations/)** - Platform-specific setup
+
 ### For Development
 
 ```bash
