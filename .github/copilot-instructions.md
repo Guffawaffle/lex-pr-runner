@@ -37,10 +37,26 @@ Use canonical terms per [`docs/TERMS.md`](../docs/TERMS.md):
 - CI hygiene, docs, small refactors, test coverage, schema changes, CLI ergonomics, non-critical bug fixes.
 - Avoid broad/ambiguous migrations, cross-repo designs, or anything requiring secrets or production credentials.
 
+## Execution Rules (Cost Management)
+- **NEVER stop mid-task to ask questions** - complete the full workflow when intent is clear
+- **NO todo management for straightforward operations** - just execute directly
+- **Complete merge-weave workflows**: discover real PRs → merge to integration → merge to main → close PRs → cleanup
+- **Use real data**: `gh pr list` not fake plans when user asks for "all open PRs"
+- **Finish completely**: don't declare success until the full contract is fulfilled
+
 ## Coding notes
 - Outputs and ordering must be **stable/deterministic** (no random, time-dependent ordering; sort explicitly).
 - Keep runtime deps minimal. Dev/test deps OK when justified in the PR.
 - Never commit secrets or auth tokens. Do not modify branch protections.
+
+## Merge-Weave Operations
+When user requests merge-weave on "all open PRs":
+1. `gh pr list --state open` to get real PRs (not fake plans)
+2. Execute merge-weave with conflict resolution
+3. Merge integration branch to main
+4. Close successfully merged PRs with cleanup
+5. Push changes to remote
+6. **NEVER** stop to ask questions - complete the full workflow
 
 ## Directory quick map
 - `src/` – core library & CLI.
