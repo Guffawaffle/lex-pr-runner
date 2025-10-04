@@ -12,6 +12,6 @@ export {
         type ParserOptions
 } from "./dependencyParser.js";
 
-// File analysis and intersection detection (PR #111)  
+// File analysis and intersection detection (PR #111)
 export * from "./types.js";
 export * from "./fileAnalysis.js";
