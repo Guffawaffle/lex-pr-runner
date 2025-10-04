@@ -73,6 +73,8 @@ Examples:
   $ lex-pr doctor                        Validate environment and configuration
   $ lex-pr discover                      Find open PRs matching scope
   $ lex-pr plan --from-github            Generate merge plan from GitHub PRs
+  $ lex-pr plan-review plan.json         Interactively review and edit plan
+  $ lex-pr plan-diff plan1.json plan2.json  Compare two plans
   $ lex-pr execute plan.json             Run quality gates on plan
   $ lex-pr merge plan.json --dry-run     Preview merge operations
 
@@ -88,8 +90,9 @@ Quick Start:
   2. Validate:    lex-pr doctor
   3. Discover:    lex-pr discover
   4. Plan:        lex-pr plan --from-github
-  5. Execute:     lex-pr execute plan.json
-  6. Merge:       lex-pr merge plan.json
+  5. Review:      lex-pr plan-review plan.json
+  6. Execute:     lex-pr execute plan.json
+  7. Merge:       lex-pr merge plan.json
 
 Documentation: https://github.com/Guffawaffle/lex-pr-runner/blob/main/docs/quickstart.md
 `)
@@ -172,6 +175,11 @@ program
 	.option("--github-token <token>", "GitHub API token (or use GITHUB_TOKEN env var)")
 	.option("--owner <owner>", "GitHub repository owner (auto-detected from git remote)")
 	.option("--repo <repo>", "GitHub repository name (auto-detected from git remote)")
+	.option("--required-gates <gates>", "Comma-separated list of required gates (default: lint,typecheck,test)")
+	.option("--max-workers <n>", "Maximum parallel workers for execution (default: 2)", parseInt)
+	.option("--target <branch>", "Target branch for merging PRs (default: repo default branch)")
+	.option("--validate-cycles", "Enable dependency cycle detection (default: true)")
+	.option("--optimize", "Optimize plan for parallel execution")
 	.action(async (opts) => {
 		try {
 			// Resolve profile first to determine default output directory
@@ -193,14 +201,23 @@ program
 				// Parse labels if provided
 				const labels = opts.labels ? opts.labels.split(',').map((l: string) => l.trim()) : undefined;
 
+				// Parse required gates if provided
+				const requiredGates = opts.requiredGates 
+					? opts.requiredGates.split(',').map((g: string) => g.trim())
+					: ["lint", "typecheck", "test"];
+
+				// Parse max workers if provided
+				const maxWorkers = opts.maxWorkers || 2;
+
 				// Generate plan from GitHub
 				plan = await generatePlanFromGitHub(client, {
 					query: opts.query,
 					labels,
 					includeDrafts: opts.includeDrafts,
+					target: opts.target,
 					policy: {
-						requiredGates: ["lint", "typecheck", "test"],
-						maxWorkers: 2
+						requiredGates,
+						maxWorkers
 					}
 				});
 
@@ -215,6 +232,37 @@ program
 
 			// Validate plan structure
 			const validatedPlan = loadPlan(canonicalJSONStringify(plan));
+
+			// Validate dependencies and detect cycles (default: enabled)
+			if (opts.validateCycles !== false && validatedPlan.items.length > 0) {
+				try {
+					computeMergeOrder(validatedPlan);
+					if (!opts.json) {
+						console.log(`✓ Dependency validation passed (no cycles detected)`);
+					}
+				} catch (error) {
+					if (error instanceof CycleError) {
+						console.error(`\n❌ Plan validation failed: ${error.message}`);
+						process.exit(1);
+					} else if (error instanceof UnknownDependencyError) {
+						console.error(`\n❌ Plan validation failed: ${error.message}`);
+						process.exit(1);
+					}
+					throw error;
+				}
+			}
+
+			// Optimize plan if requested
+			if (opts.optimize && validatedPlan.items.length > 0) {
+				// Plan is already optimized by computeMergeOrder - just show info
+				const levels = computeMergeOrder(validatedPlan);
+				if (!opts.json) {
+					console.log(`✓ Plan optimized for parallel execution: ${levels.length} levels`);
+					levels.forEach((level, idx) => {
+						console.log(`  Level ${idx + 1}: ${level.join(', ')}`);
+					});
+				}
+			}
 
 			if (opts.json) {
 				// JSON mode: output only canonical plan to stdout, write nothing else
@@ -263,6 +311,110 @@ program
 			console.log(generatePlanSummary(validatedPlan));
 
 			process.exit(0);
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
+// Plan review command - Interactive plan validation and editing
+program
+	.command("plan-review")
+	.description("Interactive plan review with human-in-the-loop validation")
+	.option("--plan <file>", "Path to plan.json file")
+	.argument("[file]", "Path to plan.json file (alternative to --plan)")
+	.option("--non-interactive", "Non-interactive mode (auto-approve)")
+	.option("--profile-dir <dir>", "Profile directory for history tracking")
+	.option("--save-history", "Save plan versions to history")
+	.option("--output <file>", "Output file for approved/modified plan")
+	.action(async (file: string | undefined, opts) => {
+		const planFile = opts.plan || file;
+		if (!planFile) {
+			console.error("Error: plan file is required (use --plan <file> or provide as argument)");
+			process.exit(1);
+		}
+
+		try {
+			const planContent = fs.readFileSync(planFile, "utf-8");
+			const plan = loadPlan(planContent);
+
+			// Import interactive review module
+			const { reviewPlan } = await import("./interactive/planReview.js");
+			const { savePlanVersion, getPlanHistoryPath } = await import("./interactive/planHistory.js");
+
+			// Run interactive review
+			const result = await reviewPlan({
+				plan,
+				interactive: !opts.nonInteractive,
+				autoApprove: opts.nonInteractive
+			});
+
+			// Save to history if requested
+			if (opts.saveHistory) {
+				const profile = resolveProfile(opts.profileDir);
+				const historyPath = getPlanHistoryPath(profile.path);
+				savePlanVersion(historyPath, result.plan, {
+					approved: result.approved,
+					changes: result.changes,
+					message: result.reason
+				});
+				console.log(`\n✓ Saved to history: ${historyPath}`);
+			}
+
+			// Save approved/modified plan
+			if (result.approved && opts.output) {
+				fs.writeFileSync(opts.output, canonicalJSONStringify(result.plan));
+				console.log(`\n✓ Saved plan to: ${opts.output}`);
+			}
+
+			if (result.approved) {
+				console.log('\n✅ Plan approved');
+				if (result.modified) {
+					console.log(`\n📝 Changes made:`);
+					result.changes?.forEach(change => console.log(`  - ${change}`));
+				}
+				process.exit(0);
+			} else {
+				console.log('\n❌ Plan rejected');
+				if (result.reason) {
+					console.log(`Reason: ${result.reason}`);
+				}
+				process.exit(1);
+			}
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
+// Plan diff command - Compare two plans
+program
+	.command("plan-diff")
+	.description("Compare two plans and show differences")
+	.argument("<plan1>", "First plan file")
+	.argument("<plan2>", "Second plan file")
+	.option("--json", "Output JSON format")
+	.action(async (plan1Path: string, plan2Path: string, opts) => {
+		try {
+			const plan1Content = fs.readFileSync(plan1Path, "utf-8");
+			const plan2Content = fs.readFileSync(plan2Path, "utf-8");
+			
+			const plan1 = loadPlan(plan1Content);
+			const plan2 = loadPlan(plan2Content);
+
+			// Import diff utilities
+			const { comparePlans, formatPlanDiff } = await import("./interactive/planDiff.js");
+
+			const diff = comparePlans(plan1, plan2);
+
+			if (opts.json) {
+				console.log(canonicalJSONStringify(diff));
+			} else {
+				console.log('\n📊 Plan Comparison\n');
+				console.log(`Plan 1: ${plan1Path}`);
+				console.log(`Plan 2: ${plan2Path}\n`);
+				console.log(formatPlanDiff(diff));
+			}
+
+			process.exit(diff.hasChanges ? 1 : 0);
 		} catch (error) {
 			exitWith(error);
 		}

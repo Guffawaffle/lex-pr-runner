@@ -1,4 +1,6 @@
 import { Plan, PlanItem } from "./schema.js";
+import { OperationCache } from "./performance.js";
+import { metrics, METRICS } from "./monitoring/metrics.js";
 
 /**
  * Merge order computation using Kahn's algorithm with deterministic tie-breaking
@@ -18,11 +20,35 @@ export class UnknownDependencyError extends Error {
 	}
 }
 
+// Cache for dependency resolution results
+const dependencyCache = new OperationCache<string[][]>(3600, true);
+
+/**
+ * Generate cache key for a plan
+ */
+function getPlanCacheKey(plan: Plan): string {
+	// Create stable key from plan items and dependencies
+	const itemsKey = plan.items
+		.map(item => `${item.name}:${item.deps.sort().join(',')}`)
+		.sort()
+		.join('|');
+	return `merge-order:${itemsKey}`;
+}
+
 /**
  * Compute merge order levels using Kahn's algorithm with deterministic ordering
  * Returns array of levels, where each level contains item names that can be processed in parallel
  */
 export function computeMergeOrder(plan: Plan): string[][] {
+	const startTime = Date.now();
+
+	// Check cache first
+	const cacheKey = getPlanCacheKey(plan);
+	const cached = dependencyCache.get(cacheKey);
+	if (cached) {
+		return cached;
+	}
+
 	const items = plan.items;
 	const itemNames = items.map(item => item.name);
 	const itemNameSet = new Set(itemNames);
@@ -84,6 +110,13 @@ export function computeMergeOrder(plan: Plan): string[][] {
 			.map(([name]) => name);
 		throw new CycleError(`dependency cycle detected involving: ${cycleNodes.join(', ')}`);
 	}
+
+	// Cache the result
+	dependencyCache.set(cacheKey, result);
+
+	// Record metrics
+	const duration = (Date.now() - startTime) / 1000;
+	metrics.observeHistogram(METRICS.DEPENDENCY_RESOLUTION_TIME, duration);
 
 	return result;
 }

@@ -186,16 +186,51 @@ lex-pr schema validate --plan ./configs/plan.json --json
 
 ### `plan`
 
-Generate plan from configuration sources.
+Generate plan from configuration sources or GitHub PRs.
 
 ```bash
 lex-pr plan [options]
 
 Options:
-  --out <dir>       Output directory for artifacts (default: ".smartergpt/runner")
-  --json            Output canonical plan JSON to stdout only
-  --dry-run         Validate inputs and show what would be written
-  -h, --help        Display help for command
+  --out <dir>               Output directory for artifacts (default: ".smartergpt/runner")
+  --json                    Output canonical plan JSON to stdout only
+  --dry-run                 Validate inputs and show what would be written
+  --from-github             Auto-discover PRs from GitHub API
+  --query <query>           GitHub search query (e.g., 'is:open label:stack:*')
+  --labels <labels>         Filter PRs by comma-separated labels
+  --include-drafts          Include draft PRs in the plan
+  --github-token <token>    GitHub API token (or use GITHUB_TOKEN env var)
+  --owner <owner>           GitHub repository owner (auto-detected from git remote)
+  --repo <repo>             GitHub repository name (auto-detected from git remote)
+  --required-gates <gates>  Comma-separated list of required gates (default: lint,typecheck,test)
+  --max-workers <n>         Maximum parallel workers for execution (default: 2)
+  --target <branch>         Target branch for merging PRs (default: repo default branch)
+  --validate-cycles         Enable dependency cycle detection (default: true)
+  --optimize                Optimize plan for parallel execution
+  -h, --help                Display help for command
+```
+
+#### Plan Generation Modes
+
+**1. Configuration Files Mode (Default)**
+```bash
+# Generate from .smartergpt/ configuration files
+lex-pr plan
+```
+
+**2. GitHub Auto-Discovery Mode**
+```bash
+# Auto-discover PRs from GitHub repository
+lex-pr plan --from-github
+
+# With custom GitHub search query
+lex-pr plan --from-github --query "is:open label:stack:feature"
+
+# Filter by specific labels
+lex-pr plan --from-github --labels "enhancement,feature"
+
+# Include draft PRs
+lex-pr plan --from-github --include-drafts
 ```
 
 #### Examples
@@ -212,6 +247,49 @@ lex-pr plan --json
 
 # Validate inputs without writing files
 lex-pr plan --dry-run
+
+# GitHub mode: Auto-discover and generate plan
+lex-pr plan --from-github --github-token $GITHUB_TOKEN
+
+# Custom policy configuration
+lex-pr plan --from-github \
+  --required-gates "lint,test,security-scan" \
+  --max-workers 4 \
+  --target develop
+
+# Optimize and validate plan
+lex-pr plan --from-github --optimize --validate-cycles
+
+# Search for specific PRs
+lex-pr plan --from-github \
+  --query "is:open label:stack:*" \
+  --labels "priority-high"
+```
+
+#### Dependency Validation
+
+The plan command automatically validates dependencies:
+
+- **Cycle Detection**: Detects circular dependencies between PRs (enabled by default with `--validate-cycles`)
+- **Unknown Dependencies**: Validates all dependencies exist in the plan
+- **Optimization**: Shows parallelization levels with `--optimize` flag
+
+```bash
+# Enable cycle detection (default)
+lex-pr plan --from-github --validate-cycles
+
+# Show optimization levels
+lex-pr plan --from-github --optimize
+```
+
+Example output with `--optimize`:
+```
+✓ Auto-discovered 5 PRs from GitHub
+✓ Dependency validation passed (no cycles detected)
+✓ Plan optimized for parallel execution: 3 levels
+  Level 1: PR-100
+  Level 2: PR-101, PR-102
+  Level 3: PR-103, PR-104
 ```
 
 #### JSON Output Schema (`--json` flag)
@@ -333,6 +411,172 @@ Total items: 4, Max parallelism: 2
 - `0`: Merge order computed successfully
 - `1`: System error (file not readable)
 - `2`: Dependency cycle or unknown dependency detected
+
+---
+
+### `plan-review`
+
+Interactively review and edit a plan with human-in-the-loop validation.
+
+```bash
+lex-pr plan-review [options] [file]
+
+Arguments:
+  file                  Path to plan.json file (alternative to --plan)
+
+Options:
+  --plan <file>         Path to plan.json file
+  --non-interactive     Non-interactive mode (auto-approve)
+  --profile-dir <dir>   Profile directory for history tracking
+  --save-history        Save plan versions to history
+  --output <file>       Output file for approved/modified plan
+  -h, --help            Display help for command
+```
+
+#### Features
+
+- **Interactive Review**: View plan summary, dependency graph, and merge order
+- **Plan Editing**: Add/remove items, modify dependencies, change target branch
+- **Validation**: Automatic validation of dependencies and cycles during editing
+- **Approval Workflow**: Approve or reject plans with optional reason
+- **History Tracking**: Save plan versions with metadata for audit trail
+- **Diff View**: See changes made during interactive session
+
+#### Examples
+
+```bash
+# Interactive review with prompts
+lex-pr plan-review plan.json
+
+# Auto-approve in non-interactive mode
+lex-pr plan-review plan.json --non-interactive
+
+# Review and save to new file
+lex-pr plan-review plan.json --output approved-plan.json
+
+# Review with history tracking
+lex-pr plan-review plan.json --save-history --profile-dir .smartergpt.local
+```
+
+#### Interactive Options
+
+When running in interactive mode, you'll see:
+
+1. **Plan Summary**: Items count, target branch, dependencies overview
+2. **Dependency Graph**: ASCII visualization of item dependencies
+3. **Merge Order**: Computed execution levels
+
+Then you can choose:
+- `[a]` Approve plan - Accept the plan as-is
+- `[r]` Reject plan - Reject with optional reason
+- `[e]` Edit plan - Interactively modify the plan
+- `[v]` View plan details - See full JSON
+- `[d]` Show diff - Compare original vs modified
+- `[q]` Quit without saving
+
+#### Edit Operations
+
+When editing, you can:
+- Add new items with dependencies
+- Remove items (validated against dependents)
+- Modify item dependencies (cycle detection)
+- Change target branch
+- Gates editing (planned for future release)
+
+#### Exit Codes
+
+- `0`: Plan approved
+- `1`: Plan rejected or operation failed
+
+---
+
+### `plan-diff`
+
+Compare two plans and show differences.
+
+```bash
+lex-pr plan-diff [options] <plan1> <plan2>
+
+Arguments:
+  plan1       First plan file
+  plan2       Second plan file
+
+Options:
+  --json      Output JSON format
+  -h, --help  Display help for command
+```
+
+#### Examples
+
+```bash
+# Human-readable diff
+lex-pr plan-diff plan-v1.json plan-v2.json
+
+# JSON output for automation
+lex-pr plan-diff plan-v1.json plan-v2.json --json
+```
+
+#### Human-Readable Output
+
+```
+📊 Plan Comparison
+
+Plan 1: plan-v1.json
+Plan 2: plan-v2.json
+
+Target Branch: main → develop
+
+Added Items:
+  + feature-d
+    deps: feature-b
+    gates: 2
+
+Removed Items:
+  - feature-c
+
+Modified Items:
+  ~ feature-b
+    deps: [feature-a] → [feature-a, feature-x]
+```
+
+#### JSON Output Schema
+
+```json
+{
+  "targetChanged": true,
+  "originalTarget": "main",
+  "modifiedTarget": "develop",
+  "addedItems": [
+    {
+      "name": "feature-d",
+      "deps": ["feature-b"],
+      "gates": []
+    }
+  ],
+  "removedItems": [
+    {
+      "name": "feature-c",
+      "deps": ["feature-a"],
+      "gates": []
+    }
+  ],
+  "modifiedItems": [
+    {
+      "name": "feature-b",
+      "originalDeps": ["feature-a"],
+      "modifiedDeps": ["feature-a", "feature-x"],
+      "originalGatesCount": 1,
+      "modifiedGatesCount": 2
+    }
+  ],
+  "hasChanges": true
+}
+```
+
+#### Exit Codes
+
+- `0`: No changes detected (plans are identical)
+- `1`: Changes detected or comparison successful
 
 ---
 
