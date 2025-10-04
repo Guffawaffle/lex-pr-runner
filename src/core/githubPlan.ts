@@ -45,11 +45,26 @@ export async function generatePlanFromGitHub(
 
 	if (filteredPRs.length === 0) {
 		// Return empty plan if no PRs found
-		return {
+		const emptyPlan: Plan = {
 			schemaVersion: "1.0.0",
 			target,
 			items: []
 		};
+		
+		// Add policy if specified
+		if (options.policy) {
+			emptyPlan.policy = {
+				requiredGates: options.policy.requiredGates || [],
+				optionalGates: [],
+				maxWorkers: options.policy.maxWorkers || 1,
+				retries: {},
+				overrides: {},
+				blockOn: [],
+				mergeRule: { type: "strict-required" }
+			};
+		}
+		
+		return emptyPlan;
 	}
 
 	// Get detailed information for each PR
