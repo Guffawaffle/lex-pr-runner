@@ -95,6 +95,19 @@ export const MergeRule = z.object({
 export type MergeRule = z.infer<typeof MergeRule>;
 
 /**
+ * Performance configuration for scale optimization
+ */
+export const PerformanceConfig = z.object({
+	maxMemoryMB: z.number().int().min(128).optional(), // Memory limit in MB
+	batchSize: z.number().int().min(1).default(50), // Batch size for large plans
+	cacheTTLSeconds: z.number().int().min(0).default(3600), // Cache TTL in seconds
+	enableCaching: z.boolean().default(true), // Enable operation caching
+	throttleOnMemory: z.boolean().default(true), // Throttle workers when memory high
+	memoryThresholdPercent: z.number().min(0).max(100).default(80) // Memory threshold %
+}).default({});
+export type PerformanceConfig = z.infer<typeof PerformanceConfig>;
+
+/**
  * Policy configuration for the plan execution
  */
 export const Policy = z.object({
@@ -106,7 +119,8 @@ export const Policy = z.object({
 		adminGreen: AdminOverride.optional()
 	}).default({}),
 	blockOn: z.array(z.string()).default([]),
-	mergeRule: MergeRule.default({ type: "strict-required" })
+	mergeRule: MergeRule.default({ type: "strict-required" }),
+	performance: PerformanceConfig.optional() // Performance tuning options
 });
 export type Policy = z.infer<typeof Policy>;
 
