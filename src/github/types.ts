@@ -37,9 +37,18 @@ export interface PullRequest {
 }
 
 export interface PullRequestDetails extends PullRequest {
-	dependencies: string[]; // Parsed from "Depends-on:" footers
+	dependencies: string[]; // Parsed from "Depends-on:" footers and other formats
 	tags: string[]; // Extracted from labels
 	requiredGates: string[]; // Extracted from labels or body
+	metadata?: {
+		priority?: string;
+		labels?: string[];
+		[key: string]: any;
+	};
+	gateOverrides?: {
+		skip?: string[];
+		required?: string[];
+	};
 }
 
 export interface PRQueryOptions {
