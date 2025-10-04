@@ -76,6 +76,13 @@ Examples:
   $ lex-pr execute plan.json             Run quality gates on plan
   $ lex-pr merge plan.json --dry-run     Preview merge operations
 
+Power User Commands:
+  $ lex-pr view plan.json                Interactive plan viewer
+  $ lex-pr query plan.json --stats       Plan statistics and analysis
+  $ lex-pr query plan.json "level eq 1"  Query items by criteria
+  $ lex-pr retry --filter failed         Retry failed gates
+  $ lex-pr completion bash               Generate bash completion
+
 Quick Start:
   1. Initialize:  lex-pr init
   2. Validate:    lex-pr doctor
@@ -697,6 +704,10 @@ program
 	.option("--execute", "Actually perform merge operations")
 	.option("--cleanup", "Clean up integration branches after execution")
 	.option("--json", "Output JSON format")
+	.option("--batch", "Enable batch mode for multiple items")
+	.option("--filter <query>", "Filter items using query language")
+	.option("--levels <levels>", "Comma-separated list of levels to merge")
+	.option("--items <items>", "Comma-separated list of items to merge")
 	.option("--max-level <level>", "Maximum autopilot level (0-4)", "0")
 	.option("--open-pr", "Open pull requests for integration branches (Level 3+)")
 	.option("--close-superseded", "Close superseded PRs after integration (Level 4)")
@@ -1346,6 +1357,225 @@ program
 			process.exit(1);
 		}
 	});
+
+// Interactive plan viewer command
+program
+	.command("view")
+	.description("Interactive plan viewer with navigation and filtering")
+	.option("--plan <file>", "Path to plan.json file")
+	.argument("[file]", "Path to plan.json file (alternative to --plan)")
+	.option("--filter <text>", "Initial filter text")
+	.option("--no-deps", "Hide dependencies by default")
+	.option("--no-gates", "Hide gates by default")
+	.action(async (file: string | undefined, opts) => {
+		const planFile = opts.plan || file;
+		if (!planFile) {
+			console.error("Error: plan file is required (use --plan <file> or provide as argument)");
+			process.exit(1);
+		}
+
+		try {
+			const { InteractivePlanViewer } = await import("./commands/planViewer.js");
+			const planContent = fs.readFileSync(planFile, "utf-8");
+			const plan = loadPlan(planContent);
+
+			const viewer = new InteractivePlanViewer(plan, {
+				filter: opts.filter,
+				showDeps: opts.deps,
+				showGates: opts.gates,
+			});
+
+			await viewer.start();
+			process.exit(0);
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
+// Query command
+program
+	.command("query [file] [query]")
+	.description("Advanced query and analysis of plan")
+	.option("--plan <file>", "Path to plan.json file")
+	.option("--format <format>", "Output format: json, table, csv", "table")
+	.option("--output <file>", "Output file (default: stdout)")
+	.option("--stats", "Show plan statistics")
+	.option("--roots", "Show root nodes (no dependencies)")
+	.option("--leaves", "Show leaf nodes (no dependents)")
+	.option("--level <level>", "Filter by merge level", parseInt)
+	.action(async (file: string | undefined, queryString: string | undefined, opts: any) => {
+		const planFile = opts.plan || file;
+
+		if (!planFile) {
+			console.error("Error: plan file is required (use --plan <file> or provide as argument)");
+			process.exit(1);
+		}
+
+		try {
+			const { PlanQueryEngine } = await import("./commands/query.js");
+			const planContent = fs.readFileSync(planFile, "utf-8");
+			const plan = loadPlan(planContent);
+
+			const engine = new PlanQueryEngine(plan);
+			let result;
+
+			if (opts.stats) {
+				result = { stats: engine.stats() };
+			} else if (opts.roots) {
+				result = engine.roots();
+			} else if (opts.leaves) {
+				result = engine.leaves();
+			} else if (opts.level) {
+				result = engine.byLevel(opts.level);
+			} else if (queryString) {
+				result = engine.query(queryString);
+			} else {
+				console.error("Error: query string or option (--stats, --roots, --leaves, --level) required");
+				process.exit(1);
+			}
+
+			const output = opts.format === 'json'
+				? canonicalJSONStringify(result)
+				: formatQueryResult(result, opts.format);
+
+			if (opts.output) {
+				fs.writeFileSync(opts.output, output);
+				console.log(`✓ Results written to ${opts.output}`);
+			} else {
+				console.log(output);
+			}
+
+			process.exit(0);
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
+// Retry command
+program
+	.command("retry")
+	.description("Retry failed gates with selective filtering")
+	.option("--state-dir <dir>", "State directory", ".smartergpt/runner")
+	.option("--filter <text>", "Filter items/gates to retry")
+	.option("--items <items>", "Comma-separated list of items to retry")
+	.option("--dry-run", "Show what would be retried without executing")
+	.option("--json", "Output JSON format")
+	.action(async (opts) => {
+		try {
+			const { RetryOperation } = await import("./commands/bulkOps.js");
+			const retry = new RetryOperation(opts.stateDir);
+
+			const items = opts.items ? opts.items.split(",").map((s: string) => s.trim()) : undefined;
+
+			const result = await retry.retryFailed({
+				filter: opts.filter,
+				items,
+				dryRun: opts.dryRun,
+			});
+
+			if (opts.json) {
+				console.log(canonicalJSONStringify(result));
+			} else {
+				if (opts.dryRun) {
+					console.log(`Would retry ${result.processedItems.length} gate(s):`);
+					result.processedItems.forEach((item) => console.log(`  - ${item}`));
+				} else {
+					console.log(`✓ Retried ${result.processedItems.length} gate(s)`);
+					if (result.failedItems.length > 0) {
+						console.log(`✗ Failed ${result.failedItems.length} gate(s)`);
+						result.errors.forEach((err) => console.log(`  - ${err.item}: ${err.error}`));
+					}
+				}
+			}
+
+			process.exit(result.success ? 0 : 1);
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
+// Completion command
+program
+	.command("completion")
+	.description("Generate shell completion scripts")
+	.argument("[shell]", "Shell type: bash, zsh", "bash")
+	.option("--install", "Show installation instructions")
+	.action(async (shell: string, opts) => {
+		try {
+			const { CompletionGenerator } = await import("./commands/completion.js");
+			const generator = new CompletionGenerator("lex-pr");
+
+			if (opts.install) {
+				console.log(generator.getInstallInstructions(shell as "bash" | "zsh"));
+				process.exit(0);
+			}
+
+			let script: string;
+			if (shell === "zsh") {
+				script = generator.generateZsh();
+			} else if (shell === "bash") {
+				script = generator.generateBash();
+			} else {
+				console.error(`Error: unsupported shell '${shell}'. Use 'bash' or 'zsh'`);
+				process.exit(1);
+			}
+
+			console.log(script);
+			process.exit(0);
+		} catch (error) {
+			exitWith(error);
+		}
+	});
+
+// Helper function to format query results
+function formatQueryResult(result: any, format: string): string {
+	if (format === 'json') {
+		return canonicalJSONStringify(result);
+	}
+
+	if (result.stats) {
+		const stats = result.stats;
+		return `Plan Statistics:
+  Total Items: ${stats.totalItems}
+  Total Levels: ${stats.totalLevels}
+  Avg Dependencies/Item: ${stats.avgDepsPerItem.toFixed(2)}
+  Avg Gates/Item: ${stats.avgGatesPerItem.toFixed(2)}
+  Root Nodes: ${stats.rootNodes}
+  Leaf Nodes: ${stats.leafNodes}`;
+	}
+
+	if (format === 'csv') {
+		const items = result.items || [];
+		if (items.length === 0) return "No results";
+
+		const headers = Object.keys(items[0]);
+		const rows = items.map((item: any) =>
+			headers.map((h) => JSON.stringify(item[h] || "")).join(",")
+		);
+		return [headers.join(","), ...rows].join("\n");
+	}
+
+	// Table format (default)
+	const items = result.items || [];
+	if (items.length === 0) return "No results";
+
+	let output = `Query: ${result.query}\nResults: ${result.count}\n\n`;
+
+	items.forEach((item: any) => {
+		output += `- ${item.name} [Level ${item.level}]\n`;
+		if (item.deps.length > 0) {
+			output += `  Deps: ${item.deps.join(", ")}\n`;
+		}
+		if (item.dependents && item.dependents.length > 0) {
+			output += `  Dependents: ${item.dependents.join(", ")}\n`;
+		}
+		if (item.gates.length > 0) {
+			output += `  Gates: ${item.gates.map((g: any) => g.name).join(", ")}\n`;
+		}
+	});
+
+	return output;
+}
 
 program.parseAsync(process.argv);
 

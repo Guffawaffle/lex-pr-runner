@@ -6,11 +6,11 @@ Autopilot provides progressive automation for merge-weave execution, from report
 
 The autopilot system implements a "ladder of automation" with increasing levels of capability:
 
-- **Level 0**: Report-only analysis (no side effects)
-- **Level 1**: Artifact generation (JSON/MD deliverables) ← **Currently Implemented**
-- **Level 2**: PR annotation + status checks (planned)
-- **Level 3**: Integration branch creation + merge (planned)
-- **Level 4**: Finalize + close superseded PRs (planned)
+- **Level 0**: Report-only analysis (no side effects) ✅ **Implemented**
+- **Level 1**: Artifact generation (JSON/MD deliverables) ✅ **Implemented**
+- **Level 2**: PR annotation + status checks ✅ **Implemented**
+- **Level 3**: Integration branch creation + merge ✅ **Implemented**
+- **Level 4**: Finalize + close superseded PRs ✅ **Implemented**
 
 ## Level 0: Report-Only Analysis
 
@@ -238,25 +238,32 @@ lex-pr execute plan.json --artifact-dir ./gate-results
     fi
 ```
 
-## Future Levels (Planned)
+## All Levels Implemented ✅
 
-### Level 2: PR Annotation + Status Checks
+All autopilot levels (0-4) have been successfully implemented:
+
+### Level 2: PR Annotation + Status Checks ✅
 - Comment on PRs with gate results
 - Update PR status checks
 - Label PRs based on merge readiness
 
-### Level 3: Integration Branch Creation + Merge
+### Level 3: Integration Branch Creation + Merge ✅
 - Create integration branch
 - Perform actual merges following computed order
 - Handle conflicts with mechanical rules
 
-### Level 4: Finalize + Close Superseded PRs
-- Tag merge-weave completion
-- Close superseded PRs
-- Update documentation
+### Level 4: Finalize + Close Superseded PRs ✅
+- Merge integration branch to target
+- Close superseded PRs (with `--close-superseded` flag)
+- Cleanup integration branches after successful merge
+- Post-merge validation and verification
+- Rollback capabilities for failed operations
+
+For detailed usage, see [Autopilot Levels Documentation](./autopilot-levels.md).
 
 ## Related Documentation
 
+- [Autopilot Levels](./autopilot-levels.md) - Complete autopilot documentation
 - [Merge-Weave Analysis](./merge-weave-analysis.md) - Strategic planning and epic breakdown
 - [Profile Resolver](../src/config/profileResolver.ts) - Write protection and profile precedence
 - [Plan Schema](../src/schema.ts) - Plan structure and validation

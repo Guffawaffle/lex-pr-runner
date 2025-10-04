@@ -10,6 +10,7 @@ export { AutopilotBase, AutopilotLevel0 } from "./base.js";
 export { AutopilotLevel1 } from "./level1.js";
 export { AutopilotLevel2 } from "./level2.js";
 export { AutopilotLevel3 } from "./level3.js";
+export { AutopilotLevel4 } from "./level4.js";
 export { ArtifactWriter } from "./artifacts.js";
 export type {
         AutopilotContext,

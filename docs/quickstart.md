@@ -313,6 +313,7 @@ lex-pr execute plan.json --json
 ## Next Steps
 
 - **Read the full CLI documentation**: `docs/cli.md`
+- **Explore advanced CLI features**: `docs/advanced-cli.md` - Interactive viewer, query language, bulk operations
 - **Explore autopilot levels**: `docs/autopilot.md`
 - **Understand profile resolution**: `docs/profile-resolution.md`
 - **Learn about weave strategies**: `docs/weave-contract.md`
@@ -348,6 +349,22 @@ lex-pr execute plan.json --json
    lex-pr execute plan.json --json | jq '.results'
    ```
 
+6. **Power user shortcuts**:
+   ```bash
+   # Interactive plan exploration
+   lex-pr view plan.json
+   
+   # Query and analyze plans
+   lex-pr query plan.json --stats
+   lex-pr query plan.json "level eq 1"
+   
+   # Batch operations
+   lex-pr merge --batch --levels "1,2" --execute
+   
+   # Shell completion
+   eval "$(lex-pr completion bash)"
+   ```
+
 ## Success! 🎉
 
 You've completed the quickstart guide. You should now be able to:
@@ -356,5 +373,6 @@ You've completed the quickstart guide. You should now be able to:
 - ✅ Generate merge plans
 - ✅ Execute quality gates
 - ✅ Merge PRs safely
+- ✅ Use advanced CLI features for power users
 
 Need help? Check the full documentation in the `docs/` directory or run `lex-pr --help`.

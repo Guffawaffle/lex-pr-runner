@@ -35,3 +35,45 @@ Best practices
 - Keep tests hermetic: always clean up files you create.
 
 If you add documentation elsewhere (e.g., CONTRIBUTING.md), include this guidance so future contributors don't reintroduce flaky tests.
+
+Autopilot Level 3-4 E2E Tests
+==============================
+
+The `autopilot-e2e-level3-4.spec.ts` file contains comprehensive end-to-end tests for Autopilot Levels 3-4:
+
+**Level 3 Test Coverage:**
+- Integration branch creation and naming validation
+- Multi-PR integration scenarios (sequential and parallel dependencies)
+- Merge conflict detection and handling
+- Gate execution on integration branches
+- Integration branch lifecycle (create → merge → cleanup)
+- Error handling and recovery testing
+- Complex dependency graphs (diamond, deep chain, wide parallel)
+- Performance testing for high-throughput execution
+
+**Level 4 Test Coverage (Stub Tests):**
+- PR cleanup and comment posting functionality (placeholders for when Level 4 is implemented)
+- Integration branch finalization and deletion
+- Custom comment templates
+
+**Test Fixtures:**
+- `fixtures/plan.integration-pyramid.json`: Multi-level dependency pyramid with foundation → features → integration
+- `fixtures/plan.deep-chain.json`: 10-PR sequential dependency chain
+- `fixtures/plan.wide-parallel.json`: 12 parallel PRs with no dependencies
+
+**Running the tests:**
+```bash
+# Run all autopilot E2E tests
+npm test -- autopilot-e2e-level3-4.spec.ts
+
+# Run specific test suites
+npm test -- autopilot-e2e-level3-4.spec.ts -t "Integration Branch Workflows"
+npm test -- autopilot-e2e-level3-4.spec.ts -t "Gate Execution"
+npm test -- autopilot-e2e-level3-4.spec.ts -t "Complex Dependency Graphs"
+```
+
+**Key Design Decisions:**
+- Tests create real git repositories in temp directories for authentic integration testing
+- All tests are deterministic and avoid timing dependencies
+- Level 4 tests are stubs documenting expected behavior for when the implementation is complete
+- Fixtures provide realistic PR graph patterns for validation
