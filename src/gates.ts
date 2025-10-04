@@ -3,6 +3,7 @@ import { Plan, Gate, PlanItem, Policy, GateResult, GateStatus, RetryConfig } fro
 import { ExecutionState } from "./executionState.js";
 import path from "path";
 import fs from "fs";
+import { classifyError, formatErrorForUser, ErrorType } from "./core/errorRecovery.js";
 
 /**
  * Gate execution with local command running, retry logic, and policy-aware execution
@@ -23,7 +24,9 @@ export async function executeGate(
 	for (let attempt = 1; attempt <= retryConfig.maxAttempts; attempt++) {
 		// Add backoff delay for retries
 		if (attempt > 1 && retryConfig.backoffSeconds > 0) {
-			await new Promise(resolve => setTimeout(resolve, retryConfig.backoffSeconds * 1000));
+			const delayMs = retryConfig.backoffSeconds * 1000;
+			console.log(`⏳ Retrying gate '${gate.name}' (attempt ${attempt}/${retryConfig.maxAttempts}) after ${retryConfig.backoffSeconds}s delay...`);
+			await new Promise(resolve => setTimeout(resolve, delayMs));
 		}
 
 		const result = await executeGateAttempt(gate, artifactDir, attempt, timeoutMs);
@@ -31,11 +34,32 @@ export async function executeGate(
 
 		// If successful, return immediately
 		if (result.status === "pass") {
+			if (attempt > 1) {
+				console.log(`✅ Gate '${gate.name}' succeeded on attempt ${attempt}`);
+			}
 			return result;
+		}
+
+		// Classify the error to determine if we should retry
+		if (result.stderr) {
+			const error = new Error(result.stderr);
+			const classified = classifyError(error, `Gate '${gate.name}' execution`);
+			
+			// Log error classification for diagnostics
+			if (classified.type === ErrorType.Permanent) {
+				console.error(`❌ Gate '${gate.name}' failed with permanent error - not retrying`);
+				console.error(formatErrorForUser(classified));
+				return result;
+			} else if (classified.type === ErrorType.Transient && attempt < retryConfig.maxAttempts) {
+				console.warn(`⚠️  Gate '${gate.name}' failed with transient error - will retry`);
+			}
 		}
 
 		// If this is the last attempt, return the result
 		if (attempt === retryConfig.maxAttempts) {
+			if (attempt > 1) {
+				console.error(`❌ Gate '${gate.name}' failed after ${attempt} attempts`);
+			}
 			return result;
 		}
 
@@ -131,13 +155,17 @@ async function executeLocalGate(
 			clearTimeout(timeout);
 			const duration = Date.now() - startTime;
 
+			// Classify the error for better diagnostics
+			const classified = classifyError(error, `Gate '${gate.name}' process error`);
+			console.error(formatErrorForUser(classified));
+
 			resolve({
 				gate: gate.name,
 				status: "fail",
 				exitCode: 1,
 				duration,
 				stdout: stdout.trim(),
-				stderr: error.message,
+				stderr: `${classified.context}: ${error.message}`,
 				artifacts: [],
 				attempts: attempt,
 				lastAttempt: startedAt
@@ -158,7 +186,8 @@ async function executeContainerGate(
 	timeoutMs: number
 ): Promise<GateResult> {
 	// TODO: Implement container execution using Docker/Podman
-	// For now, fall back to local execution
+	// For now, fall back to local execution with warning
+	console.warn(`⚠️  Container runtime for gate '${gate.name}' not yet implemented, falling back to local execution`);
 	return executeLocalGate(gate, artifactDir, attempt, startedAt, startTime, timeoutMs);
 }
 
@@ -173,13 +202,14 @@ async function executeCiServiceGate(
 	startTime: number
 ): Promise<GateResult> {
 	// TODO: Implement CI service execution (e.g., GitHub Actions API)
-	// For now, mark as skipped
+	// For now, mark as skipped with informative message
+	console.warn(`⚠️  CI service runtime for gate '${gate.name}' not yet implemented, marking as skipped`);
 	return {
 		gate: gate.name,
 		status: "skipped",
 		duration: Date.now() - startTime,
-		stdout: "CI service execution not yet implemented",
-		stderr: "",
+		stdout: "CI service execution not yet implemented - graceful degradation",
+		stderr: "This gate requires CI service integration which is not available",
 		artifacts: [],
 		attempts: attempt,
 		lastAttempt: startedAt
