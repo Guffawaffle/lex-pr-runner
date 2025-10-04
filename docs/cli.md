@@ -414,6 +414,172 @@ Total items: 4, Max parallelism: 2
 
 ---
 
+### `plan-review`
+
+Interactively review and edit a plan with human-in-the-loop validation.
+
+```bash
+lex-pr plan-review [options] [file]
+
+Arguments:
+  file                  Path to plan.json file (alternative to --plan)
+
+Options:
+  --plan <file>         Path to plan.json file
+  --non-interactive     Non-interactive mode (auto-approve)
+  --profile-dir <dir>   Profile directory for history tracking
+  --save-history        Save plan versions to history
+  --output <file>       Output file for approved/modified plan
+  -h, --help            Display help for command
+```
+
+#### Features
+
+- **Interactive Review**: View plan summary, dependency graph, and merge order
+- **Plan Editing**: Add/remove items, modify dependencies, change target branch
+- **Validation**: Automatic validation of dependencies and cycles during editing
+- **Approval Workflow**: Approve or reject plans with optional reason
+- **History Tracking**: Save plan versions with metadata for audit trail
+- **Diff View**: See changes made during interactive session
+
+#### Examples
+
+```bash
+# Interactive review with prompts
+lex-pr plan-review plan.json
+
+# Auto-approve in non-interactive mode
+lex-pr plan-review plan.json --non-interactive
+
+# Review and save to new file
+lex-pr plan-review plan.json --output approved-plan.json
+
+# Review with history tracking
+lex-pr plan-review plan.json --save-history --profile-dir .smartergpt.local
+```
+
+#### Interactive Options
+
+When running in interactive mode, you'll see:
+
+1. **Plan Summary**: Items count, target branch, dependencies overview
+2. **Dependency Graph**: ASCII visualization of item dependencies
+3. **Merge Order**: Computed execution levels
+
+Then you can choose:
+- `[a]` Approve plan - Accept the plan as-is
+- `[r]` Reject plan - Reject with optional reason
+- `[e]` Edit plan - Interactively modify the plan
+- `[v]` View plan details - See full JSON
+- `[d]` Show diff - Compare original vs modified
+- `[q]` Quit without saving
+
+#### Edit Operations
+
+When editing, you can:
+- Add new items with dependencies
+- Remove items (validated against dependents)
+- Modify item dependencies (cycle detection)
+- Change target branch
+- Gates editing (planned for future release)
+
+#### Exit Codes
+
+- `0`: Plan approved
+- `1`: Plan rejected or operation failed
+
+---
+
+### `plan-diff`
+
+Compare two plans and show differences.
+
+```bash
+lex-pr plan-diff [options] <plan1> <plan2>
+
+Arguments:
+  plan1       First plan file
+  plan2       Second plan file
+
+Options:
+  --json      Output JSON format
+  -h, --help  Display help for command
+```
+
+#### Examples
+
+```bash
+# Human-readable diff
+lex-pr plan-diff plan-v1.json plan-v2.json
+
+# JSON output for automation
+lex-pr plan-diff plan-v1.json plan-v2.json --json
+```
+
+#### Human-Readable Output
+
+```
+📊 Plan Comparison
+
+Plan 1: plan-v1.json
+Plan 2: plan-v2.json
+
+Target Branch: main → develop
+
+Added Items:
+  + feature-d
+    deps: feature-b
+    gates: 2
+
+Removed Items:
+  - feature-c
+
+Modified Items:
+  ~ feature-b
+    deps: [feature-a] → [feature-a, feature-x]
+```
+
+#### JSON Output Schema
+
+```json
+{
+  "targetChanged": true,
+  "originalTarget": "main",
+  "modifiedTarget": "develop",
+  "addedItems": [
+    {
+      "name": "feature-d",
+      "deps": ["feature-b"],
+      "gates": []
+    }
+  ],
+  "removedItems": [
+    {
+      "name": "feature-c",
+      "deps": ["feature-a"],
+      "gates": []
+    }
+  ],
+  "modifiedItems": [
+    {
+      "name": "feature-b",
+      "originalDeps": ["feature-a"],
+      "modifiedDeps": ["feature-a", "feature-x"],
+      "originalGatesCount": 1,
+      "modifiedGatesCount": 2
+    }
+  ],
+  "hasChanges": true
+}
+```
+
+#### Exit Codes
+
+- `0`: No changes detected (plans are identical)
+- `1`: Changes detected or comparison successful
+
+---
+
 ### `execute`
 
 Execute plan with policy-aware gate running and status tracking.
